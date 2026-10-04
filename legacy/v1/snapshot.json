@@ -1,0 +1,19 @@
+{
+  "description": "Exact source snapshot before the city remake",
+  "files": {
+    "GLYPH_CITY_TERMINAL_NEW.py": "b7d4a38915b885e45cd33f16a94cee596d8da0ffee1b1b1d667130ad94d97ffa",
+    "main.py": "fff6f48646c86d226d6795b5a3dce317a31c5287b7d2bebb1d6790a1ffb31d33",
+    "RENDASCII_LICENSE.txt": "20bc8c22b50233cb0da11d0d4639d1ddb8643a0253a15b6bf4d6f3c3d688a217",
+    "rendascii/utility.py": "1d8a8bcad65645ba4b57aaf9d539f8c0e04e71f0d14bb5adba37449102ed4af5",
+    "rendascii/interface.py": "9e14259b202728a1937b72c02f4555661231879982d9278023283fc34ebcc974",
+    "rendascii/resource.py": "1eed47f1395355e3d9bf1f4d82becc477df95ac2bf1901e5c474780de2431173",
+    "rendascii/__init__.py": "93aa205c9c162fd76fd4fe613961041fa081b3ce8a0dffcc529a8b5808d6259e",
+    "rendascii/pipeline/shader.py": "87b9c2682a90f2e55e7a0a4ecd46da3996cb3d8944975383b5013ab48ef7c3a4",
+    "rendascii/pipeline/__init__.py": "d4c84658290500326320237a87023f2a45900b0d4cf390925996c0fd8a3347d3",
+    "rendascii/pipeline/stage.py": "f4dbd2e576570337125b7c56502e93603f1194426854eb0e69588a98b6d0cf62",
+    "rendascii/geometry/matrix.py": "c87d521415f2dd7dfc402f0f0b7315f157ce75cb5517e108a76ce3186488ef11",
+    "rendascii/geometry/vector.py": "c51c4d98fed1e31433ce4c60b48e9ab8293114106e0dac3fe737684468dba3c0",
+    "rendascii/geometry/polygon.py": "6e4867729502c0f5573d3ceffe19a99e47329469b9f3eb7ac978932957bc3f5e",
+    "rendascii/geometry/__init__.py": "52e42f385ae3a501ae1c2d576baea030af4a74a831d742dd1dadafdd82e75b38"
+  }
+}

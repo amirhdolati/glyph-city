@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+*.ppm
+.freebuff/
+previews/
+.DS_Store
