@@ -99,7 +99,7 @@ The old RendASCII implementation is preserved in [`legacy/v1`](legacy/v1) and ca
 python3 main.py --classic
 ```
 
-The design and implementation notes are available in [`ROADMAP.fa.md`](ROADMAP.fa.md) and [`RENDERING_GAMEPLAY_CONTROLS.fa.md`](RENDERING_GAMEPLAY_CONTROLS.fa.md).
+The design and implementation notes are available in [`ROADMAP.md`](ROADMAP.md), [`RENDERING_GAMEPLAY_CONTROLS.md`](RENDERING_GAMEPLAY_CONTROLS.md), and [`docs/architecture.md`](docs/architecture.md).
 
 ## License and project status
 
