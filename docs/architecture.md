@@ -15,6 +15,14 @@ The old implementation remains under `legacy/v1/`. The main project does not imp
 shots through collision-checked city corridors. A shot change starts at the
 current pose, follows an eased route, and blends heading, lens, and height;
 NPC focus is distance-bounded and never teleports the camera through a facade.
+The shot library includes elevated eye lines at the Glass Quarter, Lantern
+Market, and Moonwater bridge so the city can be watched from roof-height
+corners as well as from the street.
+
+The renderer gives people a wider multi-cell silhouette, role colors, bright
+rain canopies, and stronger near-wall edge lines. City Watch labels only the
+active speaker, keeping names and dialogue legible instead of stacking text
+over distant buildings.
 
 `glyph_city/audio.py` loads the generated PCM bank from `assets/audio/` and
 cycles through three prebuilt variants for each short cue. Long ambience beds

@@ -23,3 +23,7 @@ by the live game, so it can be inspected without opening a terminal.
 ## Glass Quarter in mist
 
 ![Glass Quarter in mist](media/glass-quarter.png)
+
+## Rooftop corner
+
+![Rooftop corner](media/rooftop-corner.png)

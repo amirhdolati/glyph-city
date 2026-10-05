@@ -63,7 +63,8 @@ def main():
     stills=(('night-rain',build_world(23,'rain'),5,16.0),
             ('day-market',build_world(13,'clear'),2,22.0),
             ('storm-canal',build_world(20,'storm'),3,28.0),
-            ('glass-quarter',build_world(18,'mist'),4,12.0))
+            ('glass-quarter',build_world(18,'mist'),4,12.0),
+            ('rooftop-corner',build_world(19,'clear'),7,24.0))
     for name,world,shot_index,elapsed in stills:
         image=cinematic(world,renderer,shot_index,elapsed)
         image.save(OUT/(name+'.png'),optimize=True)

@@ -118,9 +118,22 @@ ART = {
     'fountain': (('    .    ','  . | .  ',' . \\|/ . ','  \\ | /  ',' ~~~|~~~ ','(=======)',' \\_____/ '),2.8,2.3),
     'rail': (('___________','| | | | | |','|_|_|_|_|_|'),4,.9),
     'stall': (('  /=====\\  ',' /_/___\\_\\ ',' |       | ',' | [tea] | ',' |=======| '),2.6,2.2),
-    'person': ((' o ','/|\\',' | ','/ \\'),.65,1.7),
+    # People use a wider silhouette so they remain legible in rain and at
+    # terminal sizes where a one-column body disappears into facade texture.
+    'person': (('  o  ',' /|\\ ',' /|\\ ',' / \\ '),.86,2.05),
     'car': (('  _____  ',' /_____\\ ','|o_____o|',' |_| |_| '),1.8,1.35),
     'boat': (('     |     ','  ___|__   ',' /______\\  ',' \\______/  ',' ~~~~~~~~  '),3.5,1.5),
+}
+
+PERSON_COLORS = {
+    'barista': (245, 165, 105),
+    'gardener': (145, 218, 151),
+    'courier': (239, 193, 116),
+    'musician': (204, 151, 246),
+    'bookseller': (145, 194, 238),
+    'photographer': (239, 142, 187),
+    'commuter': (196, 205, 214),
+    'vendor': (245, 173, 104),
 }
 
 
@@ -272,12 +285,34 @@ class Renderer:
                                 alpha = world.wet*strength*(.15+.3*self.night)
                                 buf[rr][c] = cell('|' if (rr+c)%3 else ':',mix(oldfg,fg,alpha),mix(oldbg,fg,alpha*.45))
                                 reflection_depth[rr][c] = dist
+        self._building_edges()
         self._signs(ca,sa)
         for prop in sorted(city.props,key=lambda p: -((p.x-world.x)**2+(p.y-world.y)**2)):
             self._sprite(prop,ca,sa)
         self._weather()
         if minimap: self._minimap()
         return buf
+
+    def _building_edges(self):
+        """Add a restrained silhouette line where a projected wall ends.
+
+        Dense window glyphs can otherwise make two adjacent facades read as a
+        single noisy rectangle. Edges are drawn only on empty facade cells, so
+        glass interiors and signs retain their authored detail.
+        """
+        for r in range(self.rows):
+            for c in range(self.cols):
+                bid=self.surface[r][c]
+                if bid<0: continue
+                left=c==0 or self.surface[r][c-1]!=bid
+                right=c==self.cols-1 or self.surface[r][c+1]!=bid
+                top=r==0 or self.surface[r-1][c]!=bid
+                ch,fg,bg=self.buffer[r][c]
+                if not (left or right or top) or ch not in (' ','.',':','-'):
+                    continue
+                b=self.city.buildings[bid]
+                edge=mix(fg,(226,213,171),.34 if top else .22)
+                self.buffer[r][c]=cell('=' if top else '|',edge,bg)
 
     def render_interior(self, world):
         """Render the bounded cafe room without invoking the outdoor ray caster."""
@@ -329,7 +364,7 @@ class Renderer:
         tile = self.city.tiles[iy][ix]
         h = grain(int(x*9),int(y*9),self.city.seed)
         light = local_light(self.city.glow[iy][ix],night,w.lantern and dist<9)
-        bases = {'r':(46,55,64),'p':(98,97,91),'g':(40,82,62),'b':(111,94,75),'w':(29,74,92)}
+        bases = {'r':(58,68,78),'p':(108,106,99),'g':(45,91,68),'b':(119,103,82),'w':(34,84,103)}
         base = bases[tile]
         if tile=='w':
             ripple=math.sin(x*3+y*2+w.time*1.6)
@@ -394,11 +429,13 @@ class Renderer:
 
     def _facade(self, b, u, z, span, side, dist, hx=None, hy=None):
         day,night = self.day,self.night
-        shade=(.50+.60*day)*(1 if side else .86)
+        # Keep near wall edges above the night fog floor so building shapes
+        # read as planes instead of dissolving into the background.
+        shade=(.58+.64*day)*(1 if side else .90)
         shade*=shadow_band(b.x0+u,b.y0+z,b.seed)
         if self.world.lantern: shade+=max(0,1-dist/9)*.38
         base=mix(b.color,(224,153,101),self.sunset*.2)
-        fg,bg=scale(base,shade),scale(base,shade*(.30+.08*day))
+        fg,bg=scale(base,shade),scale(base,shade*(.36+.10*day))
         bay=u%1.65; story=int(z/2.8); level=z%2.8
         emits=False
         if b.height-z<.23:
@@ -501,15 +538,15 @@ class Renderer:
         if p.kind=='person':
             pose=int(self.world.time*3+p.phase)%2
             if p.umbrella:
-                art=(' .---. ','/_____\\','   o   ','  /|\\  ','  / \\  '); width=.95; height=2.05
+                art=(' .---. ','/_____\\','|  o  |','  /|\\  ','  / \\  '); width=1.08; height=2.2
             elif p.activity=='walking':
-                art=(' o ','/|\\',' | ','/ |' if pose else '| \\')
+                art=('  o  ',' /|\\ ',' /|  ' if pose else '  |\\ ',' / \\ ')
             elif p.activity in ('reading','sorting books'):
-                art=(' o ','[=]',' | ','/ \\')
+                art=('  o  ',' [=] ','  |  ',' / \\ ')
             elif p.activity=='playing music':
-                art=(' o ','/|D',' | ','/ \\')
+                art=('  o  ',' /|D ',' /|  ',' / \\ ')
             elif p.activity=='taking photos':
-                art=(' o ','[o]',' | ','/ \\')
+                art=('  o  ',' [o] ','  |  ',' / \\ ')
             elif p.activity=='tending flowers':
                 art=('   ',' o_','/|/','/ \\'); height=1.2
         aw=max(map(len,art)); ah=len(art)
@@ -531,16 +568,31 @@ class Renderer:
                 elif p.kind=='bench': color=(175,124,81)
                 elif p.kind=='rail': color=(111,135,148)
                 elif p.kind=='flowers': color=(230,139,163) if ar<2 else (150,125,103)
-                elif p.kind=='person' and ar==0: color=(219,179,145)
+                elif p.kind=='person':
+                    role_color=PERSON_COLORS.get(getattr(p,'role',''),p.color)
+                    if p.umbrella:
+                        # The canopy catches sky light; the body stays a
+                        # distinct role color beneath it.
+                        color=((245,250,255) if ar<2 else role_color)
+                    else:
+                        color=(255,214,175) if ar==0 else role_color
                 luminous=(p.kind=='lamp' and ar<3) or (p.kind=='car' and ch=='o')
-                factor=1 if luminous else .4+.6*self.day
-                color=mix(scale(color,factor),self.fog,min(.75,z/self.visibility)*.55)
+                if p.kind=='person' and p.umbrella and ar<2: luminous=True
+                factor=(1 if luminous else .94 if p.kind=='person'
+                        else .4+.6*self.day)
+                fog_amount=.20 if p.kind=='person' else .55
+                color=mix(scale(color,factor),self.fog,min(.75,z/self.visibility)*fog_amount)
                 bg=self.buffer[r][c][2]
-                self.buffer[r][c]=cell(ch,color,mix(bg,(10,17,25),.6))
+                self.buffer[r][c]=cell(ch,color,mix(bg,(6,12,20),.82 if p.kind=='person' else .6))
                 self.depth[r][c]=z
+        focus=getattr(getattr(self.world,'life',None),'focus',None)
+        # Keep the watch overlay readable: one active speaker plus only the
+        # closest silhouettes get labels. Distant names used to pile into a
+        # single line and hide the actual people underneath.
+        show_label=(p is focus)
         if (getattr(self.world,'show_names',False)
                 and not getattr(self.world,'camera_transition',False)
-                and getattr(p,'name','') and ph>=2):
+                and getattr(p,'name','') and ph>=2 and show_label):
             label=(p.name+' / '+p.activity)[:32] if z<12 else p.name[:12]
             label_y=max(0,min(self.rows-1,math.floor(top)-1))
             label_x=round(sx-len(label)/2)
@@ -548,7 +600,7 @@ class Renderer:
                 xx=label_x+index
                 if 0<=xx<self.cols and self.depth[label_y][xx]>=z-.1:
                     self.buffer[label_y][xx]=cell(char,(218,232,221),(17,29,34))
-            if p.dialogue and z<18 and label_y>0:
+            if p.dialogue and (p is focus or z<14) and label_y>0:
                 speech='"'+p.dialogue+'"'
                 speech=speech[:self.cols-2]
                 start=max(0,min(self.cols-len(speech),round(sx-len(speech)/2)))

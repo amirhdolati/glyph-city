@@ -30,6 +30,15 @@ SHOTS = (
     Shot('Glass Quarter / skyline', (84,36), (84,34), (84,19), 2.0, 80, 85, .07),
     Shot('Copper Lane / warm windows', (24,36), (26,36), (28,29), 1.65, 70, 90, -.085),
     Shot('Moonwater / aboard the night boat', (30,91.5), (48,91.5), (63,85), 2.1, 72, 100, .105),
+    # Elevated eye lines make the skyline readable without putting the
+    # camera inside a building: the authored street corners act as rooftop
+    # overlooks and the higher eye reveals rooflines and lit upper floors.
+    Shot('Glass Quarter / rooftop corner', (84.5,36.5), (84.5,34.5), (72,48),
+         4.2, 62, 78, .12, -.045),
+    Shot('Lantern Market / awning overlook', (60.5,36.5), (63,36.5), (72,48),
+         3.4, 68, 82, -.105, -.035),
+    Shot('Moonwater / bridge overlook', (63.5,84.5), (62.5,84.5), (45,91.5),
+         3.1, 70, 88, .115, -.04),
 )
 
 

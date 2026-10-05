@@ -48,7 +48,7 @@ class OptionalSystemsChecks(unittest.TestCase):
         self.assertEqual((world.x,world.y),original)
         director.elapsed=director.shot.duration-.01; director.update(.1)
         self.assertEqual(director.index,1)
-        self.assertEqual(len(SHOTS),7)
+        self.assertGreaterEqual(len(SHOTS),10)
 
     def test_director_eases_into_a_live_npc_event(self):
         world=make_world(); life=LivingCity(world); world.life=life
