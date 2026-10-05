@@ -38,6 +38,13 @@ def make_world(seed=17, hour=17.2, weather='clear'):
 def frame(world,renderer,minimap=False,help_open=False,map_open=False,fps=0,truecolor=True,
           photo_mode=False,album=None,journal_view=None,input_mode=None,settings_view=None):
     buf=renderer.render_interior(world) if getattr(world,'scene_id','afterlight') != 'afterlight' else renderer.render(world,minimap)
+    if getattr(world,'camera_transition',False):
+        # Short letterbox bars make an active camera move read as a deliberate
+        # cinematic beat, while leaving the actual ray-cast image untouched.
+        bars=2 if len(buf)>=20 else 1
+        for row in list(range(bars))+list(range(len(buf)-bars,len(buf))):
+            for col in range(len(buf[row])):
+                buf[row][col]=cell(' ',(0,0,0),(0,0,0))
     if photo_mode:
         return buf
     if help_open: help_overlay(buf)

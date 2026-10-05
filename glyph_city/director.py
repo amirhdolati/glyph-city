@@ -16,18 +16,20 @@ class Shot:
     eye: float = 1.72
     lens: float = 66.0
     duration: float = 80.0
+    orbit: float = 0.0
+    pitch: float = -.015
 
 
 # Dolly moves are deliberately short. Transit between compositions gets its
 # own time and does not consume the quiet observation period.
 SHOTS = (
-    Shot('Afterlight / the long avenue', (60,78), (60,75), (60,48), duration=90),
-    Shot('Willow / by the fountain', (48,56), (48,54.7), (48,47), 1.4, 74, 80),
-    Shot('Lantern Market / evening tables', (60.5,48), (62,48), (72,48), 1.65, 72, 95),
-    Shot('Moonwater / reflections', (60,84), (61,84), (46,91.5), 1.6, 76, 100),
-    Shot('Glass Quarter / skyline', (84,36), (84,34), (84,19), 2.0, 80, 85),
-    Shot('Copper Lane / warm windows', (24,36), (26,36), (28,29), 1.65, 70, 90),
-    Shot('Moonwater / aboard the night boat', (30,91.5), (48,91.5), (63,85), 2.1, 72, 100),
+    Shot('Afterlight / the long avenue', (60,78), (60,75), (60,48), duration=90, orbit=.055),
+    Shot('Willow / by the fountain', (48,56), (48,54.7), (48,47), 1.4, 74, 80, -.075),
+    Shot('Lantern Market / evening tables', (60.5,48), (62,48), (72,48), 1.65, 72, 95, .09),
+    Shot('Moonwater / reflections', (60,84), (61,84), (46,91.5), 1.6, 76, 100, -.11),
+    Shot('Glass Quarter / skyline', (84,36), (84,34), (84,19), 2.0, 80, 85, .07),
+    Shot('Copper Lane / warm windows', (24,36), (26,36), (28,29), 1.65, 70, 90, -.085),
+    Shot('Moonwater / aboard the night boat', (30,91.5), (48,91.5), (63,85), 2.1, 72, 100, .105),
 )
 
 
@@ -137,8 +139,12 @@ class Director:
         t=ease(self.elapsed/shot.duration)
         x=shot.start[0]+(shot.end[0]-shot.start[0])*t
         y=shot.start[1]+(shot.end[1]-shot.start[1])*t
-        return Pose(x,y,math.atan2(shot.target[1]-y,shot.target[0]-x),
-                    shot.eye,shot.lens)
+        heading=math.atan2(shot.target[1]-y,shot.target[0]-x)
+        # A very small orbit makes the view feel operated instead of locked
+        # to a rail. It returns to neutral at each end of the composition.
+        heading += shot.orbit*math.sin(math.pi*2*t)
+        pitch=shot.pitch + .012*math.sin(math.pi*t)
+        return Pose(x,y,heading,shot.eye,shot.lens,pitch)
 
     def next(self, world=None):
         return self._switch(1,world)
@@ -159,9 +165,9 @@ class Director:
         self.subject_route=None
         self.cycles+=1
         length=sum(math.dist(a,b) for a,b in zip(route,route[1:]))
-        # Quintic easing peaks at 1.875: include it in the duration so even
-        # the middle of a long transfer stays below ~1.8 world units/sec.
-        self.transition_duration=max(6.0,length*1.875/1.8)
+        # Keep transfers energetic while still giving the eye one readable
+        # beat. Long routes cap at 5.5 seconds instead of taking 20+ seconds.
+        self.transition_duration=max(2.0,min(5.5,.9+length/7.0))
         self.transition={'from':start,'route':route,'elapsed':0.0}
         self.next_focus=self.clock+self.transition_duration+12.0
         return True
@@ -174,10 +180,15 @@ class Director:
         x,y=sample_route(move['route'],u)
         # Explicit shortest-angle interpolation avoids a spin when the look
         # target crosses the camera. Route turns do not jerk the horizon.
-        self.pose=Pose(x,y,start.angle+angle_delta(start.angle,goal.angle)*u,
+        delta=angle_delta(start.angle,goal.angle)
+        # Rotate slightly past the new heading, then settle. This gives each
+        # cut a deliberate camera-operator feel without an uncontrolled spin.
+        sweep=.18*math.sin(math.pi*u)*(1 if delta>=0 else -1)
+        self.pose=Pose(x,y,start.angle+delta*u+sweep,
                        start.eye+(goal.eye-start.eye)*u,
                        start.lens+(goal.lens-start.lens)*u,
-                       start.pitch+(goal.pitch-start.pitch)*u)
+                       start.pitch+(goal.pitch-start.pitch)*u
+                       +.018*math.sin(math.pi*u))
         if t>=1.0: self.transition=None
 
     def update(self, dt, paused=False, world=None):
