@@ -93,6 +93,20 @@ def shadow_band(x, y, seed):
     return .9 if band < 2 else 1.0
 
 
+def terrain_relief(x, y, seed):
+    """Return a smooth, world-locked height and ridge value for the ground.
+
+    A smooth field gives nearby ASCII marks a shared direction and shadow;
+    hashing every cell independently would look like TV static.
+    """
+    phase=seed*.017
+    wave=math.sin(x*1.35+y*.72+phase)*.55
+    cross=math.cos(x*.48-y*1.08-phase*.7)*.30
+    height=.5+.5*(wave+cross)
+    slope=math.cos(x*1.35+y*.72+phase)*.55 - math.sin(x*.48-y*1.08-phase*.7)*.30
+    return max(0.0,min(1.0,height)), max(-1.0,min(1.0,slope))
+
+
 def local_light(glow, night, lantern=False):
     """Map authored lamp glow to readable local illumination.
 
@@ -380,20 +394,31 @@ class Renderer:
         detail=max(0.0,min(1.0,(24.0-dist)/12.0))
         motif=grain(math.floor(x*2),math.floor(y*2),self.city.seed)
         joint=min(.12,max(.045,dist/max(self.fx,1.0)*.35))
+        relief,ridge=terrain_relief(x,y,self.city.seed)
+        # A soft directional key light makes the relief readable without
+        # turning every foreground cell into a bright outline.
+        sun_angle=(w.clock-6.0)/24.0*TAU
+        key=math.cos(x*1.35+y*.72+sun_angle)+math.sin(x*.48-y*1.08-sun_angle*.7)
+        relief_light=max(-1.0,min(1.0,key*.5+ridge*.35))
         if tile=='w':
             ripple=math.sin(x*.65+y*.45+w.time*.55)
             bg=mix(scale(base,.28+.72*day),self.fog,.18)
             fg=mix(bg,(141,184,184),.24+.22*max(0,ripple))
             bg=mix(bg,fg,max(0,ripple)*.18)
             # Broad, sparse wave crests leave most of the water quiet.
-            ch='~' if dist<22 and ripple>(.93 if dist<12 else .985) else ' '
+            if dist<12 and detail>.2:
+                ch='~' if ripple>.72 else '-' if ripple>.22 else '.' if ripple<-.72 else ' '
+            else:
+                ch='~' if dist<22 and ripple>.985 else ' '
         else:
             shade=shadow_band(x,y,self.city.seed)
             bg=scale(base,(.27+.60*day)*shade)
             fg=scale(base,(.58+.58*day)*shade)
             ch=' '
             if tile=='g' and dist<20:
-                ch=(',',"'",';')[motif%3] if motif%7<2 else ' '
+                if relief>.73 and motif%3==0: ch='^'
+                elif relief<.25 and motif%4==0: ch=','
+                else: ch=(',',"'",';')[motif%3] if motif%7<2 else ' '
                 fg=scale((74,131,83),.3+.65*day)
             elif tile=='p' and dist<22:
                 # Offset rectangular paving joints make sidewalks distinct
@@ -407,6 +432,9 @@ class Renderer:
                             math.floor(y/.9),self.city.seed)
                 bg=scale(bg,.97+(block%3)*.03)
                 fg=mix(fg,(168,153,122),.18)
+                if not (horizontal or vertical) and detail>.25:
+                    ch='.' if relief<.28 else ':' if relief>.72 else ' '
+                    fg=mix(fg,(212,198,160),.16*detail)
                 # A thin curb and occasional drain locate the road edge.
                 curb_x=((ix>0 and self.city.tiles[iy][ix-1]=='r' and x%1<.12)
                         or (ix<SIZE-1 and self.city.tiles[iy][ix+1]=='r' and x%1>.88))
@@ -417,10 +445,13 @@ class Renderer:
                     fg=scale((181,175,158),.48+.52*day)
             elif tile=='b' and dist<22:
                 # Bridge boards and nails, in contrast to sidewalk joints.
-                ch='=' if y%1.4<joint else '.' if dist<12 and motif%23==0 else ' '
+                ch='=' if y%1.4<joint else ('#' if relief>.78 and dist<12 else
+                    '.' if dist<12 and motif%23==0 else ' ')
                 fg=mix(fg,(178,144,100),.25)
             elif tile=='r' and dist<22:
-                ch='.' if dist<15 and motif%23==0 else ' '
+                if dist<13 and relief>.78: ch=':'
+                elif dist<11 and relief<.22: ch='.'
+                else: ch='.' if dist<15 and motif%23==0 else ' '
                 ax=abs(x%24-12); ay=abs(y%24-12)
                 if ax<.09 and int(y/1.7)%3<2 and ay>3:
                     ch='|'; fg=scale((230,190,111),.5+.5*day)
@@ -443,6 +474,12 @@ class Renderer:
                 beam=max(0,1-dist/9)*max(0,1-abs(c-self.cols/2)/(self.cols*.38))
                 fg=mix(fg,(234,205,140),beam*.6)
                 bg=mix(bg,(115,93,49),beam*.35)
+        # Apply a restrained raised-edge highlight and a pooled shadow to the
+        # material block. It is strongest near the camera and fades smoothly.
+        ridge_tone=(.88+.16*relief_light*detail)
+        fg=scale(fg,ridge_tone)
+        if relief_light<-.25:
+            bg=scale(bg,1.0+.10*relief_light*detail)
         fg=mix(bg,fg,detail)
         fog=fog_factor(dist,self.visibility)
         return cell(ch,mix(fg,self.fog,fog*.72),mix(bg,self.fog,fog*.52))

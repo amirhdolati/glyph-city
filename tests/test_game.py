@@ -18,7 +18,8 @@ from glyph_city.city import City, Prop, World, SIZE
 from glyph_city.game import frame, make_world, start_menu, _interaction_visible
 from glyph_city.render import (REFLECTION_MASK, WETNESS_MASK, Renderer,
                                fog_factor, reflection_noise, reflection_tick,
-                               shadow_band, local_light, window_interior)
+                               shadow_band, local_light, terrain_relief,
+                               window_interior)
 from glyph_city.interiors import room_pixel
 from glyph_city.save import SaveStore
 from glyph_city.terminal import Event, FrameSnapshot, Input, InputState, dirty_rows, dirty_spans, encode, encode_delta
@@ -97,6 +98,14 @@ class CityChecks(unittest.TestCase):
         self.assertEqual(values[0],0)
         self.assertLessEqual(values[-1],.88)
         self.assertEqual(shadow_band(12.4,38.2,17),shadow_band(12.4,38.2,17))
+
+    def test_ground_relief_is_smooth_and_world_locked(self):
+        first=terrain_relief(60.25,78.75,17)
+        self.assertEqual(first,terrain_relief(60.25,78.75,17))
+        self.assertGreaterEqual(first[0],0.0)
+        self.assertLessEqual(first[0],1.0)
+        nearby=terrain_relief(60.35,78.85,17)
+        self.assertLess(abs(first[0]-nearby[0]),.25)
 
     def test_local_light_keeps_dusk_and_night_lamps_visible(self):
         self.assertGreater(local_light(.8,1.0),local_light(.8,.2))
