@@ -557,24 +557,15 @@ class Renderer:
                 art=('  o  ',' [o] ','  |  ',' / \\ ')
             elif p.activity=='tending flowers':
                 art=('   ',' o_','/|/','/ \\'); height=1.2
-            # At close range reserve extra cells for hair, eyes and a face
-            # instead of using the compact walking glyph.
-            close_detail=height*self.fy/max(z,.35)>=7.0
-            identity=int(p.phase*13)%3
-            hair=(' /^^\\ ',' /~~\\ ',' /##\\ ')[identity]
-            eyes='(-  -) ' if (self.world.time+p.phase)%5<.16 else '(o  o) '
+            # Use one small readable face at very close range. More elaborate
+            # hair and eye art multiplied across terminal cells and made the
+            # whole fixed camera composition noisy.
+            close_detail=height*self.fy/max(z,.35)>=10.0
             if close_detail and p.umbrella:
-                art=(' .---. ','/_____\\',hair,eyes,'  --   ','  /|\\  ','  / \\  ')
+                art=(' .-. ','/___\\',' (o) ',' /|\\ ',' / \\ ')
             elif close_detail:
-                if p.activity in ('reading','sorting books'):
-                    art=(hair,eyes,'  --   ',' [=]  ','  |   ',' / \\  ')
-                elif p.activity=='playing music':
-                    art=(hair,eyes,'  --   ',' /|D\\ ',' /|   ',' / \\  ')
-                elif p.activity=='taking photos':
-                    art=(hair,eyes,'  --   ',' [o]  ','  |   ',' / \\  ')
-                else:
-                    art=(hair,eyes,'  --   ',' /|\\  ',' /|   ' if pose and p.activity=='walking' else '  |   ',' / \\  ')
-                width=1.08; height=2.2
+                art=(' ^ ','(o)','/|\\','/ \\ ')
+                width=.82; height=1.95
             # Crowd LOD keeps a fixed composition readable. Far residents
             # remain visible as moving beacons, while only nearby residents
             # spend cells on faces and clothing detail.
@@ -618,16 +609,14 @@ class Renderer:
                 elif p.kind=='flowers': color=(230,139,163) if ar<2 else (150,125,103)
                 elif p.kind=='person':
                     role_color=PERSON_COLORS.get(getattr(p,'role',''),p.color)
-                    hair_color=((143,104,78),(92,85,109),(190,152,105))[identity]
-                    skin_color=((255,214,175),(213,165,130),(184,130,99))[identity]
                     if p.umbrella:
                         # The canopy catches sky light; the body stays a
                         # distinct role color beneath it.
                         color=((245,250,255) if ar<2 else
-                               hair_color if close_detail and ar==2 else
-                               skin_color if close_detail and ar in (3,4) else role_color)
+                               (48,34,45) if close_detail and ar==2 else role_color)
                     elif close_detail:
-                        color=(hair_color if ar==0 else skin_color if ar in (1,2) else role_color)
+                        color=((48,34,45) if ar==0 else
+                               (255,214,175) if ar==1 else role_color)
                     else:
                         color=(255,214,175) if ar==0 else role_color
                 luminous=(p.kind=='lamp' and ar<3) or (p.kind=='car' and ch=='o')

@@ -153,10 +153,9 @@ class City:
                 self.props.extend((Prop(x,86.5,'rail'),Prop(x,96.5,'rail')))
         for x, y in ((57,57),(63,57),(57,63),(63,63)):
             self.props.append(Prop(x,y,'flowers'))
-        # A slightly denser population gives the watch mode visible motion in
-        # more than one district while the living simulation still queues
-        # people on the shared walking network.
-        for _ in range(40):
+        # Keep enough residents for a living city while leaving visual space
+        # for facades, signs and the route itself in a terminal frame.
+        for _ in range(28):
             a = rng.choice(AVENUES)
             y = rng.uniform(5,SIZE-5)
             x = a + rng.choice((-3.3,3.3))
