@@ -538,7 +538,9 @@ class Renderer:
                 bg=self.buffer[r][c][2]
                 self.buffer[r][c]=cell(ch,color,mix(bg,(10,17,25),.6))
                 self.depth[r][c]=z
-        if getattr(self.world,'show_names',False) and getattr(p,'name','') and ph>=2:
+        if (getattr(self.world,'show_names',False)
+                and not getattr(self.world,'camera_transition',False)
+                and getattr(p,'name','') and ph>=2):
             label=(p.name+' / '+p.activity)[:32] if z<12 else p.name[:12]
             label_y=max(0,min(self.rows-1,math.floor(top)-1))
             label_x=round(sx-len(label)/2)

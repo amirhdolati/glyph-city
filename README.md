@@ -7,6 +7,7 @@ Glyph City: Afterlight is a living ASCII city that keeps running when nobody is 
 ![Night rain](docs/media/night-rain.png)
 ![Day market](docs/media/day-market.png)
 ![Storm canal](docs/media/storm-canal.png)
+![Glass Quarter in mist](docs/media/glass-quarter.png)
 
 The project is a terminal-first zero-player simulation with an optional first-person walk mode. It runs on macOS, Linux, and WSL terminals that support ANSI colors. A terminal around 120 columns by 40 rows gives the city enough room to breathe.
 
@@ -44,8 +45,9 @@ python3 main.py --max-width 120 --fps 24
 - Ground-floor glass windows with furnished interiors: cafes, restaurants, bookshops, vinyl stores, hotels, bars, lounges, and mature 18+ venues represented through environmental silhouettes and lighting.
 - A day and night clock, clear/rain/storm/mist weather, gradual wetness, umbrella and shelter behavior, an automatic canal boat, a playable cafe room, a journal, a map, photo mode, and a persistent album.
 - City Watch, a zero-player mode with named residents, jobs, destinations, queues, shelters, conversations, staged public events, and cinematic camera shots that can follow an active NPC.
+- City Watch camera moves are collision-aware: manual and automatic shot changes use a slow curved transfer from the current pose, with bounded subject focus and no hard teleport between viewpoints.
 - Staged events such as parcel delivery, street music, shared umbrellas, and neighborhood blackouts. Every event has several beats and changes what the participants are doing.
-- A layered soundscape with rain, wind, water, traffic, leaves, footsteps, birds, music, doors, thunder, stereo attenuation, and camera-aware direction when a native backend is available.
+- A layered soundscape with long rain, wind, water, traffic, and leaves beds plus cached multi-variant footsteps, birds, music, doors, thunder, car passes, rain hits, and drips. The generated PCM bank lives in [`assets/audio`](assets/audio) and is reused at runtime without synthesizing SFX during gameplay.
 - A settings panel inside the game for palette, Truecolor, FPS, render width, cell aspect, mouse sensitivity, camera bob, night contrast, storm flashes, and volume.
 
 ## Controls
@@ -77,6 +79,12 @@ The committed gallery lives in [`docs/media`](docs/media). Rebuild the PNG still
 
 ```sh
 python3 tools/make_previews.py
+```
+
+Rebuild the deterministic audio bank after changing a sound recipe:
+
+```sh
+python3 tools/make_audio.py
 ```
 
 Export a browser preview or an ANSI snapshot directly from the renderer:

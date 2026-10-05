@@ -43,27 +43,43 @@ def build_world(hour, weather):
 
 def render(world, renderer, director=None):
     if director:
-        director.update(0.7,world=world)
         view=director.view(world)
     else:
         view=world
     return frame(view,renderer,truecolor=True)
 
 
+def cinematic(world, renderer, shot_index, elapsed):
+    """Render a still from a deliberate City Watch composition."""
+    director=Director(shot_index)
+    director.elapsed=elapsed
+    return draw_frame(render(world,renderer,director),
+                      OUT/(f'_still_{shot_index}.png'))
+
+
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
-    renderer=Renderer(96,28,.5)
-    stills=(('night-rain',build_world(23,'rain')),
-            ('day-market',build_world(12,'clear')),
-            ('storm-canal',build_world(20,'storm')))
-    for name,world in stills:
-        draw_frame(render(world,renderer),OUT/(name+'.png'))
+    renderer=Renderer(112,32,.5)
+    stills=(('night-rain',build_world(23,'rain'),5,16.0),
+            ('day-market',build_world(13,'clear'),2,22.0),
+            ('storm-canal',build_world(20,'storm'),3,28.0),
+            ('glass-quarter',build_world(18,'mist'),4,12.0))
+    for name,world,shot_index,elapsed in stills:
+        image=cinematic(world,renderer,shot_index,elapsed)
+        image.save(OUT/(name+'.png'),optimize=True)
     world=build_world(21,'rain'); director=Director(); frames=[]
-    for _ in range(32):
+    for index in range(64):
         world.update(.7,{})
+        # Give each composition time to breathe, then glide to the next one.
+        if index in (20,40):
+            director.next(world)
+        director.update(.7,world=world)
         frames.append(draw_frame(render(world,renderer,director),OUT/'_frame.png').copy())
-    frames[0].save(OUT/'city-watch.gif',save_all=True,append_images=frames[1:],duration=180,loop=0,optimize=False)
+    frames[0].save(OUT/'city-watch.gif',save_all=True,append_images=frames[1:],
+                   duration=150,loop=0,optimize=False)
     (OUT/'_frame.png').unlink(missing_ok=True)
+    for path in OUT.glob('_still_*.png'):
+        path.unlink(missing_ok=True)
 
 
 if __name__=='__main__': main()

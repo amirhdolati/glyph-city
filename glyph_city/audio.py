@@ -8,6 +8,8 @@ import subprocess
 import tempfile
 import wave
 import shutil
+import time
+from pathlib import Path
 
 try:
     import numpy as np
@@ -15,6 +17,25 @@ except ImportError:
     np = None
 
 RATE = 24000
+ASSET_DIR = Path(__file__).resolve().parents[1] / 'assets' / 'audio'
+
+
+def load_sample(path):
+    with wave.open(str(path), 'rb') as stream:
+        if stream.getframerate()!=RATE or stream.getsampwidth()!=2:
+            raise ValueError('Audio bank must use 24 kHz PCM16')
+        channels=stream.getnchannels()
+        data=np.frombuffer(stream.readframes(stream.getnframes()),dtype='<i2')
+    return (data.astype('float32')/32768).reshape(-1,channels)
+
+# Short Foley is prepared once when the mixer starts.  Triggering a footstep
+# used to run a convolution and allocate a fresh waveform on the audio path,
+# which could add latency exactly when the camera or NPCs were busiest.
+SFX_DURATIONS = {
+    'step': .22, 'wetstep': .30, 'door': .60, 'bird': .65,
+    'bell': 2.4, 'music': 1.9, 'thunder': 5.0, 'car_pass': 1.4,
+    'rain_hit': .42, 'drip': .55,
+}
 
 
 def spatial_gain(listener, x, y, radius=14):
@@ -45,7 +66,7 @@ class SilentAudio:
 
 class Mixer(SilentAudio):
     """An independently clocked mixer; the game only supplies source locations."""
-    def __init__(self, volume=1., muted=False):
+    def __init__(self, volume=1., muted=False, *, generate=False):
         super().__init__(volume, muted, '')
         self.rng=np.random.default_rng(901)
         self.lock=threading.Lock()
@@ -60,9 +81,22 @@ class Mixer(SilentAudio):
         self.status='streaming'
         self.backend=None
         # Independent prime-length textures prevent a short repeating pattern.
-        self.banks={name:self.texture(seconds, low, high) for name,seconds,low,high in (
-            ('rain',29,180,5500),('wind',31,35,650),('water',37,90,1700),
-            ('traffic',23,45,380),('leaves',19,600,3500))}
+        self.banks={}
+        for name,seconds,low,high in (
+                ('rain',29,180,5500),('wind',31,35,650),('water',37,90,1700),
+                ('traffic',23,45,380),('leaves',19,600,3500)):
+            path=ASSET_DIR/(name+'.wav')
+            self.banks[name]=(load_sample(path) if path.exists() and not generate
+                              else self.texture(seconds,low,high))
+        self.samples={}
+        for cue in SFX_DURATIONS:
+            variants=[]
+            for variant in range(3):
+                path=ASSET_DIR/f'{cue}-{variant+1}.wav'
+                variants.append(load_sample(path)[:,0] if path.exists() and not generate
+                                else self._synth(cue,variant))
+            self.samples[cue]=tuple(variants)
+        self.sample_index={cue: 0 for cue in SFX_DURATIONS}
 
     def texture(self, seconds, low, high):
         n=RATE*seconds
@@ -98,8 +132,11 @@ class Mixer(SilentAudio):
             envelope=target+(previous-target)*np.exp(-np.arange(1,frames+1)[:,None]/(RATE*.35))
             self.gains[name]=envelope[-1]
             bank=self.banks[cue]
+            # Each positioned source has its own phase; several cars/trees
+            # no longer amplify identical noise in perfect synchrony.
+            phase=sum((i+1)*ord(ch) for i,ch in enumerate(name))*7919
             modulation=.87+.13*np.sin(indices/RATE*.31+len(name))
-            output+=bank[indices%len(bank)]*envelope*modulation[:,None]
+            output+=bank[(indices+phase)%len(bank)]*envelope*modulation[:,None]
         remaining=[]
         for data,offset,gain,pan in voices:
             count=min(frames,len(data)-offset)
@@ -111,29 +148,54 @@ class Mixer(SilentAudio):
         self.cursor+=frames
         return np.tanh(output*(0 if self.muted else self.volume)).astype('float32')
 
-    def trigger(self, cue, gain=.3, pan=0):
-        # No speech-like beeps: conversations are text, while Foley stays environmental.
-        durations={'step':.22,'wetstep':.3,'door':.6,'bird':.65,'bell':2.4,'music':1.9,'thunder':5.0}
-        if cue not in durations or gain<=.005: return False
-        n=int(RATE*durations[cue]); t=np.arange(n)/RATE
+    def _synth(self, cue, variant=0):
+        """Create one natural-sounding Foley variant during mixer setup."""
+        n=int(RATE*SFX_DURATIONS[cue]); t=np.arange(n)/RATE
         noise=self.rng.normal(size=n)
-        if cue in ('step','wetstep','door','thunder'):
-            width={'step':25,'wetstep':9,'door':55,'thunder':190}[cue]
+        if cue in ('step','wetstep','door','thunder','car_pass','rain_hit','drip'):
+            width={'step':25,'wetstep':9,'door':55,'thunder':190,
+                   'car_pass':75,'rain_hit':5,'drip':7}[cue]
             filtered=np.convolve(noise,np.ones(width)/math.sqrt(width),'same')
-            decay={'step':25,'wetstep':17,'door':8,'thunder':.9}[cue]
-            data=filtered*np.exp(-t*decay)*.10
+            decay={'step':25,'wetstep':17,'door':8,'thunder':.9,
+                   'car_pass':2.2,'rain_hit':10,'drip':8}[cue]
+            data=filtered*np.exp(-t*decay)*({'thunder':.18,'car_pass':.12,
+                                              'rain_hit':.065}.get(cue,.10))
+            if cue in ('step','wetstep'):
+                # A quiet tonal body makes wet footsteps read as material,
+                # while the noise keeps each variant from sounding synthetic.
+                body=np.sin(2*math.pi*(85+variant*9)*t)*np.exp(-t*18)*.035
+                data += body
+            elif cue=='car_pass':
+                sweep=np.sin(2*math.pi*(75+variant*18)*t)*np.exp(-t*1.8)*.06
+                data += sweep
+            elif cue=='drip':
+                click=np.sin(2*math.pi*760*t)*np.exp(-t*22)*.12
+                data += click
         elif cue=='bird':
-            frequency=self.rng.uniform(1700,2700)
-            data=np.sin(2*math.pi*(frequency*t+350*t*t))*np.sin(math.pi*t/t[-1])**4*.045
+            frequency=1700+variant*260+self.rng.uniform(-70,70)
+            chirp=np.sin(2*math.pi*(frequency*t+350*t*t))
+            second=np.sin(2*math.pi*(frequency*1.17*t+240*t*t))
+            data=(chirp+second*.45)*np.sin(math.pi*t/t[-1])**4*.045
         else:
-            frequency=self.rng.choice([196.,220.,261.63,293.66,329.63])
+            frequency=[196.,220.,261.63,293.66,329.63][variant%5]
             data=sum(np.sin(2*math.pi*frequency*ratio*t)*level*np.exp(-t*decay)
                      for ratio,level,decay in ((1,.09,2),(2.01,.025,3),(3.98,.01,6)))
         data*=np.minimum(1,t/.008)
         data[-min(n,240):]*=np.linspace(1,0,min(n,240))
+        return data.astype('float32')
+
+    def trigger(self, cue, gain=.3, pan=0):
+        # No speech-like beeps: conversations are text, while Foley stays
+        # environmental.  Samples were generated in __init__, so this path
+        # only schedules an already prepared buffer.
+        variants=self.samples.get(cue)
+        if not variants or gain<=.005: return False
+        variant=self.sample_index[cue]
+        self.sample_index[cue]=(variant+1)%len(variants)
+        data=variants[variant]
         with self.lock:
             if len(self.voices)>=16: return False
-            self.voices.append((data.astype('float32'),0,gain,pan))
+            self.voices.append((data,0,gain,pan))
         return True
 
     def play(self, cue, *, intensity=1.): return self.trigger(cue,intensity)
@@ -157,6 +219,9 @@ class Mixer(SilentAudio):
                                                     listener.y+(p.y-listener.y)*q/8) for q in range(1,8)):
                     gain*=.25
                 if cue: sources[f'{cue}:{index}']=(cue,gain*(.13 if cue=='leaves' else .28),pan)
+                if p.kind=='car' and gain>.16 and self.clock>=self.cooldowns.get('car:'+str(index),0):
+                    self.trigger('car_pass',gain*.32,pan)
+                    self.cooldowns['car:'+str(index)]=self.clock+self.rng.uniform(2.8,5.2)
                 if p.kind=='person' and gain>.12:
                     nearby.append((p,gain,pan))
                     if p.activity=='walking' and self.clock>=self.cooldowns.get(index,0):
@@ -176,6 +241,10 @@ class Mixer(SilentAudio):
                 _,gain,pan=musicians[0]; self.trigger('music',gain*.4,pan)
             elif world.weather==2:
                 self.trigger('thunder',.3,self.rng.uniform(-.7,.7))
+            elif world.rain>.45:
+                self.trigger('rain_hit',.22,self.rng.uniform(-.8,.8))
+            elif interior and world.rain>.1:
+                self.trigger('drip',.16,self.rng.uniform(-.5,.5))
             elif 6<world.clock<18 and not interior and 39<listener.x<57 and 39<listener.y<57:
                 self.trigger('bird',.25,self.rng.uniform(-.8,.8))
 
@@ -191,70 +260,75 @@ class Mixer(SilentAudio):
 
 
 class ProcessAudio(Mixer):
-    """Safe macOS stream using one long stereo file and one player process."""
+    """macOS fallback with short, overlapped stereo chunks on a worker thread.
+
+    The game only changes source targets. Mixing, WAV encoding and launching
+    afplay happen off the game thread. The shared overlap contains identical
+    PCM with complementary fades, so weather and camera changes do not stop
+    an active rain bed or discard Foley.
+    """
     def __init__(self, volume=1., muted=False):
-        super().__init__(volume, muted)
+        super().__init__(volume,muted)
+        self.player=shutil.which('afplay')
+        if not self.player: raise OSError('afplay is unavailable')
         self.targets={'rain':('rain',.25,0.),'wind':('wind',.05,0.),
                       'water':('water',.04,.15),'leaves':('leaves',.03,-.2)}
-        self.player=shutil.which('afplay')
-        self.path=os.path.join(tempfile.gettempdir(),'glyph-city-soundscape.wav')
-        self.process=None
-        self.sound_signature=None
-        self.next_refresh=0.0
-        self.write_soundscape()
-        self.process=subprocess.Popen([self.player,'-v',str(max(.01,min(1.,volume))),self.path],
-                                      stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        self.directory=tempfile.TemporaryDirectory(prefix='glyph-city-audio-')
+        self.processes=[]
+        self.done=threading.Event()
+        self.worker=threading.Thread(target=self._stream,name='glyph-city-audio',daemon=True)
+        self.worker.start()
 
-    def write_soundscape(self):
-        frames=RATE*30
-        self.cursor=0
-        chunks=[]
-        written=0
-        while written<frames:
-            chunk=self.render(min(4096,frames-written)); chunks.append(chunk); written+=len(chunk)
-        data=np.concatenate(chunks)
-        # Seamless loop: blend the last second into the first second.
-        fade=min(RATE,len(data)//2)
-        ramp=np.linspace(0,1,fade,dtype='float32')[:,None]
-        data[-fade:]=data[-fade:]*(1-ramp)+data[:fade]*ramp
-        pcm=np.clip(data*32767,-32767,32767).astype('<i2')
-        with wave.open(self.path,'wb') as stream:
-            stream.setnchannels(2); stream.setsampwidth(2); stream.setframerate(RATE)
-            stream.writeframes(pcm.tobytes())
+    def _stream(self):
+        stride=3.0; overlap=.3
+        shared=None; sequence=0
+        try:
+            deadline=time.monotonic()
+            while not self.done.is_set():
+                # Render the new part once. The tail is reused in the next
+                # file to keep phase and gain continuous across player starts.
+                if shared is None:
+                    data=self.render(round(RATE*(stride+overlap)))
+                else:
+                    data=np.concatenate((shared,self.render(round(RATE*stride))))
+                shared=data[-round(RATE*overlap):].copy()
+                fade=round(RATE*overlap)
+                ramp=np.linspace(0,1,fade,dtype='float32')[:,None]
+                data[:fade]*=ramp; data[-fade:]*=1-ramp
+                path=Path(self.directory.name)/f'chunk-{sequence%4}.wav'
+                with wave.open(str(path),'wb') as stream:
+                    stream.setnchannels(2); stream.setsampwidth(2); stream.setframerate(RATE)
+                    stream.writeframes(np.clip(data*32767,-32767,32767).astype('<i2').tobytes())
+                delay=deadline-time.monotonic()
+                if delay>0 and self.done.wait(delay): break
+                if self.done.is_set(): break
+                process=subprocess.Popen([self.player,str(path)],
+                                         stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                self.processes=[p for p in self.processes if p.poll() is None]
+                self.processes.append(process)
+                sequence+=1
+                deadline+=stride
+                # An overloaded machine may miss a deadline; recover from
+                # current time instead of launching several chunks at once.
+                deadline=max(deadline,time.monotonic()+.05)
+        except (OSError,ValueError,RuntimeError) as exc:
+            self.reason=str(exc); self.status='audio-error'
 
     def update(self, dt):
-        if self.process is None or self.process.poll() is not None:
-            self.write_soundscape()
-            self.process=subprocess.Popen([self.player,'-v',str(max(.01,min(1.,self.volume))),self.path],
-                stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-
-    def scene(self, world, listener, dt):
-        super().scene(world,listener,dt)
-        signature=(world.weather, listener.scene_id, int(world.rain*4),
-                   int((listener.angle%(2*math.pi))/(math.pi/2)))
-        if signature!=self.sound_signature and self.clock>=self.next_refresh:
-            self.sound_signature=signature
-            self.next_refresh=self.clock+8.0
-            self.refresh()
-
-    def refresh(self):
-        if self.process and self.process.poll() is None:
-            self.process.terminate()
-            try: self.process.wait(timeout=.2)
-            except subprocess.TimeoutExpired: self.process.kill()
-        self.write_soundscape()
-        self.process=subprocess.Popen([self.player,'-v',str(max(.01,min(1.,self.volume))),self.path],
-            stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-
-    def stop(self, cue=None):
-        if self.process and self.process.poll() is None:
-            self.process.terminate()
-            try: self.process.wait(timeout=.2)
-            except subprocess.TimeoutExpired: self.process.kill()
-        super().stop(cue)
+        pass
 
     def close(self):
-        if self.process and self.process.poll() is None: self.process.terminate()
+        self.done.set()
+        if threading.current_thread() is not self.worker:
+            self.worker.join(timeout=2)
+        for process in self.processes:
+            if process.poll() is None:
+                process.terminate()
+                try: process.wait(timeout=.2)
+                except subprocess.TimeoutExpired:
+                    process.kill(); process.wait()
+        self.processes.clear()
+        if not self.worker.is_alive(): self.directory.cleanup()
         super().close()
 
 
@@ -264,16 +338,19 @@ def create_audio(*, volume=1., muted=False):
     if np is None: return SilentAudio(volume,muted,'Install numpy to enable audio')
     mixer=None
     try:
+        # Prefer a continuous native callback on every platform, including
+        # macOS. The process fallback remains usable without sounddevice.
+        import sounddevice
         mixer=Mixer(volume,muted)
-        if sys.platform=='darwin':
-            mixer.close()
-            return ProcessAudio(volume,muted)
-        else:
-            import sounddevice
-            stream=sounddevice.OutputStream(samplerate=RATE,channels=2,dtype='float32',
-                callback=lambda out,frames,timing,status: out.__setitem__(slice(None),mixer.render(frames)))
-            stream.start(); mixer.backend=stream
+        stream=sounddevice.OutputStream(samplerate=RATE,channels=2,dtype='float32',
+            callback=lambda out,frames,timing,status: out.__setitem__(slice(None),mixer.render(frames)))
+        mixer.backend=stream
+        stream.start()
         return mixer
-    except (ImportError,OSError,RuntimeError) as exc:
+    except (ImportError,OSError,RuntimeError,ValueError) as exc:
         if mixer: mixer.close()
+        if sys.platform=='darwin' and shutil.which('afplay'):
+            try: return ProcessAudio(volume,muted)
+            except (OSError,RuntimeError,ValueError) as fallback:
+                return SilentAudio(volume,muted,str(fallback))
         return SilentAudio(volume,muted,str(exc))

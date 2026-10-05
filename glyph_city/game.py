@@ -402,13 +402,11 @@ def play(args):
                     settings_open=True; settings_selected=0; input_state.clear(); help_open=map_open=False
                     continue
                 if key in ('[',']') and world.observing:
-                    if key==']': director.next()
-                    else:
-                        director.index=(director.index-1)%len(SHOTS)
-                        director.elapsed=0
+                    if key==']': director.next(world)
+                    else: director.previous(world)
                     continue
                 if key=='n' and world.observing:
-                    director.next(); continue
+                    director.next(world); continue
                 if key in ('shift-left','shift-right'):
                     input_state.apply(event,started)
                     continue
