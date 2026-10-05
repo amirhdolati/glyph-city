@@ -87,7 +87,7 @@ def room_pixel(sign, width, depth, u, z, direction):
     if axis==2 and point[2]<.1:
         tile=(int(point[0]*2)+int(point[1]*2))%2
         bg=(88,68,47) if tile else (112,88,61)
-        ch='.' if tile else ' '; fg=(155,125,86)
+        ch=' '; fg=(155,125,86)
         if sign in ('BAR','LOUNGE','18+'):
             bg=(84,36,58) if tile else (112,45,65); fg=(203,84,126)
     elif axis==2:
@@ -97,7 +97,7 @@ def room_pixel(sign, width, depth, u, z, direction):
         if sign in ('BAR','LOUNGE','18+'):
             fg=(232,125,158); bg=(91,37,61) if axis==1 else (55,29,52)
         if 1.25<point[2]<1.85 and abs(point[0]-width*.5)<width*.16:
-            ch='=' if point[2]<1.35 or point[2]>1.75 else '*'
+            ch=' '
             fg=(224,182,99); bg=(45,72,69)
     for bounds,color in furniture(sign,width,depth):
         hit=intersect(origin,direction,bounds)
@@ -106,14 +106,7 @@ def room_pixel(sign, width, depth, u, z, direction):
             factor=(.72,.87,1.0)[side]
             bg=tuple(int(v*factor) for v in color)
             fg=tuple(min(255,int(v*1.25)) for v in color)
-            if sign in ('BAR','LOUNGE','18+'):
-                ch='=' if side==2 else 'O'
-            elif sign in ('BOOKS','VINYL','FLORA'):
-                ch='#' if side==2 else '|'
-            elif sign in ('RAMEN','CAFE','BAKERY'):
-                ch='o' if side==2 else 'T'
-            elif sign=='JAZZ':
-                ch='~' if side==2 else 'o'
-            else:
-                ch='-' if side==2 else '|'
+            # Furniture geometry and face shading carry the shape. A glyph
+            # on every surface sample turns chairs and shelves into stripes.
+            ch=' '
     return ch,fg,bg

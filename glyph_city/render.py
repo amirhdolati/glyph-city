@@ -111,13 +111,13 @@ def cell(ch, fg, bg):
 
 
 ART = {
-    'tree': (('   .-oo-.   ',' .o*oooo*o. ','(ooo*oooooo)',' `oo*ooo*-\' ','    ||     ','    ||     ','   /__\\    '),2.6,4.2),
+    'tree': ((' .---. ','/     \\','\\_____/','   |   ','   |   ','  /_\\  '),2.6,4.2),
     'lamp': (('  ___  ',' /___\\ ',' | o | ','  \\|/  ','   |   ','   |   ','   |   ','  _|_  '),.75,3.8),
     'bench': ((' _______ ','|=======|','|_______|',' ||   || '),1.9,.9),
     'flowers': ((' * . * ','\\|/*|/','[=====]',' \\___/ '),1.1,.85),
     'fountain': (('    .    ','  . | .  ',' . \\|/ . ','  \\ | /  ',' ~~~|~~~ ','(=======)',' \\_____/ '),2.8,2.3),
     'rail': (('___________','| | | | | |','|_|_|_|_|_|'),4,.9),
-    'stall': (('  /=====\\  ',' /_/___\\_\\ ',' |       | ',' | [tea] | ',' |=======| '),2.6,2.2),
+    'stall': (('  /---\\  ',' /     \\ ',' | tea | ',' |_____| '),2.6,2.2),
     # People use a wider silhouette so they remain legible in rain and at
     # terminal sizes where a one-column body disappears into facade texture.
     'person': (('  o  ',' /|\\ ',' /|\\ ',' / \\ '),.86,2.05),
@@ -220,9 +220,10 @@ class Renderer:
                              +.5*math.sin(az*13-ratio*11+world.time*.015))
                     ch, fg, cbg = ' ',scale(bg,1.2),bg
                     if .17 < ratio < .76 and cloud > 1.1-world.cloud*.75:
-                        ch = '~' if cloud>1.15 else '.'
                         fg = mix(bg,(206,199,186),.22+.28*day)
-                        cbg = mix(bg,fg,.15)
+                        # Cloud mass reads through its color, not a sheet of
+                        # repeated dots and tildes behind the buildings.
+                        cbg = mix(bg,fg,.28)
                     elif self.night>.6 and world.cloud<.5:
                         star = grain(int((az%TAU)*135),int(ratio*65),self.city.seed)
                         if star%127==0:
@@ -255,10 +256,9 @@ class Renderer:
                 for r in range(top_r,bottom_r+1):
                     z = eye+(horizon-r-.5)*dist/self.fy
                     if not 0<=z<=b.height or dist>depths[r][c]+.02: continue
-                    bay=u%1.65
                     level=z%2.8
-                    if (int(z/2.8)==0 and .18<bay<1.48 and
-                            .62<level<1.78 and .22<u<span-.22):
+                    if (int(z/2.8)==0 and .35<level<2.08
+                            and .22<u<span-.22):
                         normal=abs(dx if side==0 else dy)
                         tangent=(dy if dx>0 else -dy) if side==0 else (-dx if dy>0 else dx)
                         depth=min(4.5,(b.x1-b.x0) if side==0 else (b.y1-b.y0))
@@ -281,14 +281,14 @@ class Renderer:
                             rx,ry = coords
                             if (self.surface[rr][c]<0 and dist<reflection_depth[rr][c]
                                     and dist<32
-                                    and reflection_noise(rx,ry,city.seed,reflection_tick_value)%9!=0):
+                                    and reflection_noise(rx,ry,city.seed,reflection_tick_value)%9<2):
                                 oldch,oldfg,oldbg = buf[rr][c]
                                 # Reflections are glints on the pavement, not
                                 # a second opaque wall. Preserve lane marks,
                                 # sprites and existing road texture.
                                 if oldch in (' ','.',':','~'):
                                     alpha = world.wet*strength*(.045+.11*self.night)
-                                    buf[rr][c] = cell(':' if (rr+c)%4 else '.',
+                                    buf[rr][c] = cell(oldch,
                                                       mix(oldfg,fg,alpha),
                                                       mix(oldbg,fg,alpha*.22))
                                     reflection_depth[rr][c] = dist
@@ -315,7 +315,7 @@ class Renderer:
                 right=c==self.cols-1 or self.surface[r][c+1]!=bid
                 top=r==0 or self.surface[r-1][c]!=bid
                 ch,fg,bg=self.buffer[r][c]
-                if not (left or right or top) or ch not in (' ','.',':','-'):
+                if not (top or (left and c%3==0) or (right and c%3==0)) or ch not in (' ','.',':','-'):
                     continue
                 b=self.city.buildings[bid]
                 edge=mix(fg,(226,213,171),.34 if top else .22)
@@ -367,37 +367,37 @@ class Renderer:
         day,night,w = self.day,self.night,self.world
         ix,iy = math.floor(x),math.floor(y)
         if not 0<=ix<SIZE or not 0<=iy<SIZE or dist>FAR:
-            return cell('.',scale(self.fog,.9),scale(self.fog,.7))
+            return cell(' ',scale(self.fog,.9),scale(self.fog,.7))
         tile = self.city.tiles[iy][ix]
         h = grain(int(x*9),int(y*9),self.city.seed)
         light = local_light(self.city.glow[iy][ix],night,w.lantern and dist<9)
         bases = {'r':(58,68,78),'p':(108,106,99),'g':(45,91,68),'b':(119,103,82),'w':(34,84,103)}
         base = bases[tile]
         if tile=='w':
-            ripple=math.sin(x*3+y*2+w.time*1.6)
+            ripple=math.sin(x*.65+y*.45+w.time*.55)
             bg=mix(scale(base,.28+.72*day),self.fog,.18)
             fg=mix(bg,(141,184,184),.24+.22*max(0,ripple))
-            ch='~' if ripple>.2 else '-'
-            if night>.5 and h%9<2: fg=mix(fg,(226,168,106),.5)
+            bg=mix(bg,fg,max(0,ripple)*.18)
+            # Broad, sparse wave crests leave most of the water quiet.
+            ch='~' if dist<22 and ripple>.985 else ' '
         else:
             shade=shadow_band(x,y,self.city.seed)
             bg=scale(base,(.27+.60*day)*shade)
             fg=scale(base,(.58+.58*day)*shade)
-            ch='.' if h%7==0 else ' '
+            ch=' '
             if tile=='g':
-                ch=(',',"'",'.',';')[h%4] if h%3 else ' '
                 fg=scale((74,131,83),.3+.65*day)
-            elif tile in ('p','b'):
-                if x%1<.075 or y%1<.075: ch=':' if tile=='p' else '='
-                elif h%11==0: ch='.'
+            elif tile=='b' and dist<16:
+                if y%3<.06: ch='-'
             elif tile=='r':
                 ax=abs(x%24-12); ay=abs(y%24-12)
                 if ax<.09 and int(y/1.7)%3<2 and ay>3:
                     ch='|'; fg=scale((230,190,111),.5+.5*day)
                 elif ay<.09 and int(x/1.7)%3<2 and ax>3:
                     ch='-'; fg=scale((230,190,111),.5+.5*day)
-                elif ((3.0<ay<4.1 and ax<2.1) or (3.0<ax<4.1 and ay<2.1)) and h%3:
-                    ch='='; fg=scale((187,188,168),.35+.65*day)
+                elif ((3.0<ay<4.1 and ax<2.1) or (3.0<ax<4.1 and ay<2.1)):
+                    # Crossings are light bands instead of noisy equals.
+                    bg=mix(bg,scale((187,188,168),.35+.65*day),.35)
             if light:
                 bg=mix(bg,(134,97,55),min(.86,light*.78))
                 fg=mix(fg,(246,194,112),min(.92,light*.92))
@@ -406,7 +406,6 @@ class Renderer:
                 wet = w.wet * wetness
                 bg=mix(bg,scale(bg,.62),wet)
                 if h%17<3:
-                    ch='-' if h%2 else '.'
                     fg=mix(fg,self.fog,wet*.6)
             if w.lantern and dist<9:
                 beam=max(0,1-dist/9)*max(0,1-abs(c-self.cols/2)/(self.cols*.38))
@@ -439,7 +438,6 @@ class Renderer:
         # Keep near wall edges above the night fog floor so building shapes
         # read as planes instead of dissolving into the background.
         shade=(.58+.64*day)*(1 if side else .90)
-        shade*=shadow_band(b.x0+u,b.y0+z,b.seed)
         if self.world.lantern: shade+=max(0,1-dist/9)*.38
         base=mix(b.color,(224,153,101),self.sunset*.2)
         fg,bg=scale(base,shade),scale(base,shade*(.36+.10*day))
@@ -452,34 +450,27 @@ class Renderer:
         elif story==0 and 2.15<z<2.5 and abs(u-span/2)<len(b.sign)*.26:
             ch='-'; fg=scale(b.neon,.5); bg=scale(b.neon,.14); emits=True
         elif .18<bay<1.48 and .48<level<2.24:
-            lit=(grain(int(u/1.65),story,b.seed)%100)<(18+night*68)
-            # Thick mullions make each pane read as glass instead of one
-            # continuous colored wall when a facade is close to the camera.
+            lit=(grain(int(u/1.65),story,b.seed)%100)<(18+night*42)
+            # Frames and room surfaces use color blocks. Filling every pane
+            # with furniture glyphs used to obscure the building silhouette.
             edge=bay<.36 or bay>1.30 or level<.82 or level>1.98
             if edge:
-                ch='|' if .82<level<1.98 else '-'
+                ch=' '
                 fg=scale(base,shade*.82); bg=scale((24,29,38),.8)
             elif lit:
                 glow=mix((255,190,92),b.neon,.2)
                 glass=mix((20,27,38),glow,.26+.12*night)
                 fg=scale(glow,.9+.3*night); bg=scale(glass,.78)
-                ch, interior=window_interior(b.sign,b.seed,int(u/1.65),story,level)
-                # The colored background is the room behind the glass; the
-                # bright glyph is furniture or a person silhouette inside it.
-                bg=mix(bg,scale(interior,.20+.12*night),.32)
-                fg=mix(fg,interior,.60+.28*night)
-                if grain(int(u*11),int(z*11),b.seed)%13==0:
-                    ch='"'; fg=mix(fg,(210,230,238),.72)
+                ch=' '
                 emits=True
             else:
-                ch=':' if int(level*8)%4 else '-'
+                ch=' '
                 fg=mix((49,89,119),self.fog,.25); bg=scale(fg,.25)
         elif story==0 and abs(u-span/2)<.42 and z<1.9:
             ch='|' if abs(u-span/2)>.3 else '.'
             fg=scale(b.neon,.45); bg=(14,18,24)
         else:
-            ch=':' if (int(z*5)+int(u*6))%5==0 else '.'
-            if dist>28: ch=':' if side else '.'
+            ch=' '
         if hx is not None and hy is not None and not emits:
             ix,iy=math.floor(hx),math.floor(hy)
             if 0<=ix<SIZE and 0<=iy<SIZE:
@@ -601,7 +592,7 @@ class Renderer:
                 ch=art[ar][ac] if ac<len(art[ar]) else ' '
                 if ch==' ' or z>self.depth[r][c]+.05: continue
                 color=p.color
-                if p.kind=='tree': color=(96,148,104) if ar<4 else (137,105,74)
+                if p.kind=='tree': color=(96,148,104) if ar<3 else (137,105,74)
                 elif p.kind=='lamp': color=(255,209,123) if ar<3 else (114,127,139)
                 elif p.kind=='fountain': color=(128,196,215) if ar<5 else (136,147,155)
                 elif p.kind=='bench': color=(175,124,81)
