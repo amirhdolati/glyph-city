@@ -69,6 +69,7 @@ class Resident:
     partner: object = None
     reply_at: float = 0.0
     speech_until: float = 0.0
+    followup: str = ''
 
 
 ROLES = ('barista','gardener','courier','musician','bookseller','photographer','commuter','vendor')
@@ -77,14 +78,44 @@ JOBS = {'barista':'serving tea','gardener':'tending flowers','courier':'deliveri
         'commuter':'reading','vendor':'arranging the stall'}
 EXCHANGES = {
     'barista': (("Your usual? The kettle is ready.", "Yes, and a seat by the window."),
-                ("Try the jasmine tea today.", "Just what I needed after that walk.")),
-    'gardener': (("These flowers finally opened.", "The whole path smells like spring."),),
-    'courier': (("A parcel for you, all dry!", "You made it before the rain."),),
-    'musician': (("One more song before I go?", "Play the one about the river."),),
-    'bookseller': (("I saved that book for you.", "Then my evening is sorted."),),
-    'photographer': (("Look at the light on the water.", "Wait, the boat is coming into frame."),),
-    'commuter': (("Taking the long way home?", "There is no hurry tonight."),),
-    'vendor': (("Fresh tea, last pot of the evening.", "I'll bring a cup to my friend."),),
+                ("Try the jasmine tea today.", "Just what I needed after that walk."),
+                ("The window seat is free again.", "Then I can watch the rain arrive.")),
+    'gardener': (("These flowers finally opened.", "The whole path smells like spring."),
+                 ("The fountain is low tonight.", "I will bring water before sunrise.")),
+    'courier': (("A parcel for you, all dry!", "You made it before the rain."),
+                ("The next delivery is across the canal.", "I know a bridge with a dry lamp.")),
+    'musician': (("One more song before I go?", "Play the one about the river."),
+                 ("Do you hear that train under the bridge?", "I will tune the chorus to it.")),
+    'bookseller': (("I saved that book for you.", "Then my evening is sorted."),
+                   ("The blue cover has a map inside.", "Good. I have been looking for the long way home.")),
+    'photographer': (("Look at the light on the water.", "Wait, the boat is coming into frame."),
+                     ("The neon is reflected twice tonight.", "Hold still. The city is posing.")),
+    'commuter': (("Taking the long way home?", "There is no hurry tonight."),
+                 ("The market is still open.", "Then I have time for one warm cup.")),
+    'vendor': (("Fresh tea, last pot of the evening.", "I'll bring a cup to my friend."),
+               ("The lanterns look brighter from here.", "They always do after the first rain.")),
+}
+
+RAIN_EXCHANGES = {
+    'barista': ("Close the door behind you.", "I will. The street is turning silver."),
+    'gardener': ("The leaves are drinking tonight.", "And the roots will remember it."),
+    'courier': ("Keep this under the awning.", "I have one more dry street to cross."),
+    'musician': ("The rain is keeping time.", "Then I will follow its rhythm."),
+    'bookseller': ("The paper smells like wet pavement.", "That is how I know the storm is near."),
+    'photographer': ("Do not move. Look at the puddle.", "It has the whole skyline in it."),
+    'commuter': ("You can wait here a while.", "The long way is better under cover."),
+    'vendor': ("Two cups beneath the awning?", "Two cups, and one story each."),
+}
+
+FAREWELLS = {
+    'barista': "I will keep the kettle warm for you.",
+    'gardener': "Come back tomorrow; the buds should open.",
+    'courier': "See you after my last delivery.",
+    'musician': "I will save that song for next time.",
+    'bookseller': "Tell me what you think of the ending.",
+    'photographer': "I will show you the picture next time.",
+    'commuter': "Walk with me again tomorrow?",
+    'vendor': "I will save you a cup tomorrow.",
 }
 
 
@@ -95,12 +126,26 @@ class LivingCity:
         self.shelters=tuple(self.network.nearest(p) for p in SHELTERS)
         self.rng=random.Random(world.city.seed+917)
         self.residents=[]
+        occupied=set()
         for i,prop in enumerate(p for p in world.city.props if p.kind=='person'):
             node=self.destinations[i%len(self.destinations)]
             # Start visibly distributed along a valid corridor.
             for _ in range(i%9):
                 neighbors=self.network.edges[node]
                 if neighbors: node=self.rng.choice(neighbors)
+            # Several residents used to land on the same start node. Their
+            # large close-up sprites then became one unreadable bright mass.
+            # Pick the nearest free node on the validated walking graph.
+            if node in occupied:
+                pending=deque([node]); seen=set()
+                while pending:
+                    candidate=pending.popleft()
+                    if candidate in seen: continue
+                    seen.add(candidate)
+                    if candidate not in occupied:
+                        node=candidate; break
+                    pending.extend(sorted(self.network.edges[candidate]))
+            occupied.add(node)
             prop.x,prop.y=node[0]+.5,node[1]+.5
             prop.route=()
             prop.name=NAMES[i%len(NAMES)]+(' '+str(i//len(NAMES)+1) if i>=len(NAMES) else '')
@@ -120,6 +165,7 @@ class LivingCity:
         self.focus=None
         self.history=deque(maxlen=32)
         self.encounters=0
+        self.met_pairs=set()
         self.public_event=None
         self.public_phase=-1
         self.public_next=0.0
@@ -137,9 +183,17 @@ class LivingCity:
                 resident.reply_at=0
                 if resident.partner:
                     partner,line=resident.partner
+                    resident.partner=None
+                    p.dialogue=''
                     partner.prop.dialogue=line; partner.speech_until=world.time+6
+                    partner.prop.activity='chatting'
+                    self.focus=partner.prop
                     self.caption=f'{partner.prop.name}: "{line}"'
                     self.history.append(self.caption)
+                    if resident.followup:
+                        partner.reply_at=world.time+4
+                        partner.partner=(resident,resident.followup)
+                        resident.followup=''
             if world.time<resident.social_until:
                 continue
             # Offset shifts avoid the entire population turning at the same instant.
@@ -201,14 +255,20 @@ class LivingCity:
                     math.hypot(r.prop.x-speaker.prop.x,r.prop.y-speaker.prop.y)<3.5),None)
                 if partner:
                     lines=self.rng.choice(EXCHANGES[speaker.role])
-                    if raining: lines=("Plenty of room under this awning.","Thank you. I'll wait for the rain to ease.")
-                    speaker.prop.dialogue=lines[0]; speaker.speech_until=world.time+5
+                    if raining: lines=RAIN_EXCHANGES[speaker.role]
+                    pair=tuple(sorted((speaker.prop.name,partner.prop.name)))
+                    opening=lines[0]
+                    if pair in self.met_pairs:
+                        opening=f"Good to see you, {partner.prop.name}. "+opening
+                    self.met_pairs.add(pair)
+                    speaker.prop.dialogue=opening; speaker.speech_until=world.time+5
                     speaker.reply_at=world.time+4; speaker.partner=(partner,lines[1])
+                    speaker.followup=FAREWELLS[speaker.role]
                     for r in (speaker,partner):
-                        r.social_until=world.time+11; r.next_chat=world.time+self.rng.uniform(55,100)
+                        r.social_until=world.time+15; r.next_chat=world.time+self.rng.uniform(55,100)
                         r.prop.activity='chatting'
                     self.encounters+=1; self.focus=speaker.prop
-                    self.caption=f'{speaker.prop.name}: "{lines[0]}"'
+                    self.caption=f'{speaker.prop.name}: "{opening}"'
                     self.history.append(self.caption)
                     break
         if world.time>=self.next_event:
@@ -256,6 +316,12 @@ class LivingCity:
             script=((first,'looking up',f'{first.prop.name}: Did the whole street just go dark?'),
                     (second,'using a phone light',f'{second.prop.name}: Give it a moment. Listen to the rain.'),
                     (first,'watching lights return',f'{first.prop.name}: There they are.'))
+        # Public scenes take over their actors without an old chat replying
+        # halfway through the new scene.
+        actors={id(actor) for actor,_,_ in script}
+        for resident in self.residents:
+            if id(resident) in actors or (resident.partner and id(resident.partner[0]) in actors):
+                resident.reply_at=0; resident.partner=None; resident.followup=''
         self.public_event={'kind':kind,'script':script}
         self.public_phase=-1; self.public_next=world.time
         self.event_kind=kind; self.event_until=world.time+25

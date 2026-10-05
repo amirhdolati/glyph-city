@@ -280,11 +280,18 @@ class Renderer:
                         if strength and coords is not None:
                             rx,ry = coords
                             if (self.surface[rr][c]<0 and dist<reflection_depth[rr][c]
-                                    and reflection_noise(rx,ry,city.seed,reflection_tick_value)%5!=0):
+                                    and dist<32
+                                    and reflection_noise(rx,ry,city.seed,reflection_tick_value)%9!=0):
                                 oldch,oldfg,oldbg = buf[rr][c]
-                                alpha = world.wet*strength*(.15+.3*self.night)
-                                buf[rr][c] = cell('|' if (rr+c)%3 else ':',mix(oldfg,fg,alpha),mix(oldbg,fg,alpha*.45))
-                                reflection_depth[rr][c] = dist
+                                # Reflections are glints on the pavement, not
+                                # a second opaque wall. Preserve lane marks,
+                                # sprites and existing road texture.
+                                if oldch in (' ','.',':','~'):
+                                    alpha = world.wet*strength*(.045+.11*self.night)
+                                    buf[rr][c] = cell(':' if (rr+c)%4 else '.',
+                                                      mix(oldfg,fg,alpha),
+                                                      mix(oldbg,fg,alpha*.22))
+                                    reflection_depth[rr][c] = dist
         self._building_edges()
         self._signs(ca,sa)
         for prop in sorted(city.props,key=lambda p: -((p.x-world.x)**2+(p.y-world.y)**2)):
@@ -417,7 +424,7 @@ class Renderer:
         ch,fg,bg=room_pixel(b.sign,span,depth,u,z,direction)
         length=math.hypot(direction[0],direction[1])
         grazing=1-direction[1]/max(length,1e-6)
-        reflection=.045+.23*grazing**3
+        reflection=.025+.11*grazing**3
         fg=mix(fg,(131,174,191),reflection)
         bg=mix(bg,self.fog,reflection)
         # A narrow continuous streak leaves most of the view transparent.
@@ -535,6 +542,7 @@ class Renderer:
         lateral=-dx*sa+dy*ca
         lod = self.sprite_lod(p, z)
         art,width,height = LOD_ART[p.kind] if lod == 0 else ART[p.kind]
+        person_scale=1.0
         if p.kind=='person':
             pose=int(self.world.time*3+p.phase)%2
             if p.umbrella:
@@ -549,10 +557,50 @@ class Renderer:
                 art=('  o  ',' [o] ','  |  ',' / \\ ')
             elif p.activity=='tending flowers':
                 art=('   ',' o_','/|/','/ \\'); height=1.2
+            # At close range reserve extra cells for hair, eyes and a face
+            # instead of using the compact walking glyph.
+            close_detail=height*self.fy/max(z,.35)>=7.0
+            identity=int(p.phase*13)%3
+            hair=(' /^^\\ ',' /~~\\ ',' /##\\ ')[identity]
+            eyes='(-  -) ' if (self.world.time+p.phase)%5<.16 else '(o  o) '
+            if close_detail and p.umbrella:
+                art=(' .---. ','/_____\\',hair,eyes,'  --   ','  /|\\  ','  / \\  ')
+            elif close_detail:
+                if p.activity in ('reading','sorting books'):
+                    art=(hair,eyes,'  --   ',' [=]  ','  |   ',' / \\  ')
+                elif p.activity=='playing music':
+                    art=(hair,eyes,'  --   ',' /|D\\ ',' /|   ',' / \\  ')
+                elif p.activity=='taking photos':
+                    art=(hair,eyes,'  --   ',' [o]  ','  |   ',' / \\  ')
+                else:
+                    art=(hair,eyes,'  --   ',' /|\\  ',' /|   ' if pose and p.activity=='walking' else '  |   ',' / \\  ')
+                width=1.08; height=2.2
+            # Crowd LOD keeps a fixed composition readable. Far residents
+            # remain visible as moving beacons, while only nearby residents
+            # spend cells on faces and clothing detail.
+            if z>30:
+                art=('.' if not p.umbrella else '-',); width=.42; height=.72
+            elif z>16 and not close_detail:
+                if p.umbrella:
+                    art=(' .-. ','| o |',' /|\\ ',' / \\ '); width=.82; height=1.65
+                else:
+                    art=(' o ','/|\\','/ \\'); width=.62; height=1.55
+            projected=height*self.fy/max(z,.35)
+            max_person_height=min(10.0,self.rows*.45)
+            if projected>max_person_height:
+                scale_factor=max_person_height/projected
+                width*=scale_factor; height*=scale_factor
+                person_scale=scale_factor
         aw=max(map(len,art)); ah=len(art)
         sx=self.cols/2+lateral*self.fx/z
-        bottom=self.horizon+self.eye*self.fy/z
+        # Compress the whole near-person projection around the horizon.
+        # Shrinking only its height would push its face below the screen.
+        bottom=self.horizon+self.eye*self.fy/z*person_scale
         pw,ph=width*self.fx/z,height*self.fy/z
+        if p.kind=='person':
+            # Terminal cells are tall: unrestricted horizontal magnification
+            # repeats each eye/hair glyph and makes faces look like fences.
+            pw=min(pw,ph*aw/ah*1.2)
         left,top=sx-pw/2,bottom-ph
         if left>=self.cols or left+pw<0: return
         for r in range(max(0,math.floor(top)),min(self.rows,math.ceil(bottom))):
@@ -570,10 +618,16 @@ class Renderer:
                 elif p.kind=='flowers': color=(230,139,163) if ar<2 else (150,125,103)
                 elif p.kind=='person':
                     role_color=PERSON_COLORS.get(getattr(p,'role',''),p.color)
+                    hair_color=((143,104,78),(92,85,109),(190,152,105))[identity]
+                    skin_color=((255,214,175),(213,165,130),(184,130,99))[identity]
                     if p.umbrella:
                         # The canopy catches sky light; the body stays a
                         # distinct role color beneath it.
-                        color=((245,250,255) if ar<2 else role_color)
+                        color=((245,250,255) if ar<2 else
+                               hair_color if close_detail and ar==2 else
+                               skin_color if close_detail and ar in (3,4) else role_color)
+                    elif close_detail:
+                        color=(hair_color if ar==0 else skin_color if ar in (1,2) else role_color)
                     else:
                         color=(255,214,175) if ar==0 else role_color
                 luminous=(p.kind=='lamp' and ar<3) or (p.kind=='car' and ch=='o')
@@ -586,8 +640,8 @@ class Renderer:
                 self.buffer[r][c]=cell(ch,color,mix(bg,(6,12,20),.82 if p.kind=='person' else .6))
                 self.depth[r][c]=z
         focus=getattr(getattr(self.world,'life',None),'focus',None)
-        # Keep the watch overlay readable: one active speaker plus only the
-        # closest silhouettes get labels. Distant names used to pile into a
+        # Keep the watch overlay readable: only the active speaker gets a
+        # label. Distant names used to pile into a
         # single line and hide the actual people underneath.
         show_label=(p is focus)
         if (getattr(self.world,'show_names',False)

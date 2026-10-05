@@ -37,6 +37,7 @@ def draw_frame(cells, path):
 def build_world(hour, weather):
     world=make_world(hour=hour,weather=weather)
     world.life=LivingCity(world)
+    world.life.update(world,0)
     world.observing=True; world.show_names=True
     return world
 
