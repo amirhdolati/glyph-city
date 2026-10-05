@@ -2,6 +2,7 @@
 
 ## Current development
 
+- Added distance-faded ASCII ground materials: staggered paving joints, curbs and drains, asphalt speckles and crossings, grass tufts, bridge boards, and nearby wave crests.
 - Simplified facade, pavement, water, cloud, window, and interior glyphs so color blocks and key silhouettes carry the scene without ASCII noise.
 - Added distance based detail: near surfaces keep expressive ASCII props, window interiors, road marks, and wave crests while distant geometry stays as readable color planes.
 - Reduced wet-road and glass reflection glare to preserve static-view silhouettes and road markings.
