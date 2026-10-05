@@ -493,8 +493,14 @@ class Renderer:
         seam=min(u%pane,pane-u%pane)
         if seam<.035 or z<.29 or z>2.055:
             return ('|' if seam<.035 else '-',(139,165,167),(25,36,41),False)
-        ch,fg,bg=room_pixel(b.sign,span,depth,u,z,direction) if dist<18 else (
-            ' ',(174,148,111),(60,48,39))
+        if dist<28:
+            ch,fg,bg=room_pixel(b.sign,span,depth,u,z,direction)
+            # Preserve a few recognizable interior marks at middle distance,
+            # while thinning the furniture so panes remain transparent.
+            if dist>=18 and grain(int(u*9),int(z*9),b.seed)%3:
+                ch=' '
+        else:
+            ch,fg,bg=' ',(174,148,111),(60,48,39)
         length=math.hypot(direction[0],direction[1])
         grazing=1-direction[1]/max(length,1e-6)
         reflection=.025+.11*grazing**3
@@ -516,33 +522,43 @@ class Renderer:
         base=mix(b.color,(224,153,101),self.sunset*.2)
         fg,bg=scale(base,shade),scale(base,shade*(.36+.10*day))
         bay=u%1.65; story=int(z/2.8); level=z%2.8
+        facade_detail=max(0.0,min(1.0,(34.0-dist)/18.0))
+        window_seed=grain(int(u/1.65),story,b.seed)
         emits=False
         if b.height-z<.23:
             ch='='; fg=scale(base,shade*1.35)
         elif level<.13:
             ch='-'; fg=scale(base,shade*1.2)
+        elif facade_detail>.18 and (level<.24 or level>2.58):
+            # Floor slabs give tall flat faces a readable vertical scale.
+            ch='-' if window_seed%3 else '='
+            fg=scale(base,shade*.98)
         elif story==0 and 2.15<z<2.5 and abs(u-span/2)<len(b.sign)*.26:
             ch='-'; fg=scale(b.neon,.5); bg=scale(b.neon,.14); emits=True
         elif .18<bay<1.48 and .48<level<2.24:
-            lit=(grain(int(u/1.65),story,b.seed)%100)<(18+night*42)
+            lit=(window_seed%100)<(18+night*42)
             # Frames and room surfaces use color blocks. Filling every pane
             # with furniture glyphs used to obscure the building silhouette.
             edge=bay<.36 or bay>1.30 or level<.82 or level>1.98
             if edge:
-                ch='|' if dist<18 and .82<level<1.98 else '-' if dist<18 else ' '
+                ch='|' if facade_detail>.48 and .82<level<1.98 else '-' if facade_detail>.28 else ' '
                 fg=scale(base,shade*.82); bg=scale((24,29,38),.8)
             elif lit:
                 glow=mix((255,190,92),b.neon,.2)
                 glass=mix((20,27,38),glow,.26+.12*night)
                 fg=scale(glow,.9+.3*night); bg=scale(glass,.78)
-                ch=('o' if grain(int(u*11),int(z*11),b.seed)%7==0 else
-                    ' ' if dist>=18 else '.')
+                if facade_detail>.68:
+                    ch='O' if window_seed%5 else 'o'
+                elif facade_detail>.32:
+                    ch='o' if window_seed%3 else ' '
+                else:
+                    ch=' '
                 emits=True
             else:
-                ch=':' if dist<18 and int(level*8)%4==0 else ' '
+                ch='.' if facade_detail>.48 and window_seed%3==0 else ' '
                 fg=mix((49,89,119),self.fog,.25); bg=scale(fg,.25)
         elif story==0 and abs(u-span/2)<.42 and z<1.9:
-            ch='|' if abs(u-span/2)>.3 else '.'
+            ch='|' if abs(u-span/2)>.3 else 'D' if facade_detail>.35 else '.'
             fg=scale(b.neon,.45); bg=(14,18,24)
         else:
             ch=' '

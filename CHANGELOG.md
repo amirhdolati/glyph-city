@@ -2,6 +2,7 @@
 
 ## Current development
 
+- Strengthened hand-authored ASCII building silhouettes with floor bands, window frames, doors, and sparse readable furniture through the middle distance.
 - Added distance-faded ASCII ground materials: staggered paving joints, curbs and drains, asphalt speckles and crossings, grass tufts, bridge boards, and nearby wave crests.
 - Extended the ground detail band into middle distance with softer cadence, so ASCII paving, road marks, grass, bridge boards, and wave lines remain visible farther along the view.
 - Simplified facade, pavement, water, cloud, window, and interior glyphs so color blocks and key silhouettes carry the scene without ASCII noise.
