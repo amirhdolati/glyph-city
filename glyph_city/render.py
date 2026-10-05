@@ -315,6 +315,8 @@ class Renderer:
                 right=c==self.cols-1 or self.surface[r][c+1]!=bid
                 top=r==0 or self.surface[r-1][c]!=bid
                 ch,fg,bg=self.buffer[r][c]
+                if self.depth[r][c] > 24:
+                    continue
                 if not (top or (left and c%3==0) or (right and c%3==0)) or ch not in (' ','.',':','-'):
                     continue
                 b=self.city.buildings[bid]
@@ -389,7 +391,7 @@ class Renderer:
                 fg=scale((74,131,83),.3+.65*day)
             elif tile=='b' and dist<16:
                 if y%3<.06: ch='-'
-            elif tile=='r':
+            elif tile=='r' and dist<22:
                 ax=abs(x%24-12); ay=abs(y%24-12)
                 if ax<.09 and int(y/1.7)%3<2 and ay>3:
                     ch='|'; fg=scale((230,190,111),.5+.5*day)
@@ -420,7 +422,8 @@ class Renderer:
         seam=min(u%pane,pane-u%pane)
         if seam<.035 or z<.29 or z>2.055:
             return ('|' if seam<.035 else '-',(139,165,167),(25,36,41),False)
-        ch,fg,bg=room_pixel(b.sign,span,depth,u,z,direction)
+        ch,fg,bg=room_pixel(b.sign,span,depth,u,z,direction) if dist<18 else (
+            ' ',(174,148,111),(60,48,39))
         length=math.hypot(direction[0],direction[1])
         grazing=1-direction[1]/max(length,1e-6)
         reflection=.025+.11*grazing**3
@@ -455,16 +458,17 @@ class Renderer:
             # with furniture glyphs used to obscure the building silhouette.
             edge=bay<.36 or bay>1.30 or level<.82 or level>1.98
             if edge:
-                ch=' '
+                ch='|' if dist<18 and .82<level<1.98 else '-' if dist<18 else ' '
                 fg=scale(base,shade*.82); bg=scale((24,29,38),.8)
             elif lit:
                 glow=mix((255,190,92),b.neon,.2)
                 glass=mix((20,27,38),glow,.26+.12*night)
                 fg=scale(glow,.9+.3*night); bg=scale(glass,.78)
-                ch=' '
+                ch=('o' if grain(int(u*11),int(z*11),b.seed)%7==0 else
+                    ' ' if dist>=18 else '.')
                 emits=True
             else:
-                ch=' '
+                ch=':' if dist<18 and int(level*8)%4==0 else ' '
                 fg=mix((49,89,119),self.fog,.25); bg=scale(fg,.25)
         elif story==0 and abs(u-span/2)<.42 and z<1.9:
             ch='|' if abs(u-span/2)>.3 else '.'

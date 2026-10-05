@@ -3,6 +3,7 @@
 ## Current development
 
 - Simplified facade, pavement, water, cloud, window, and interior glyphs so color blocks and key silhouettes carry the scene without ASCII noise.
+- Added distance based detail: near surfaces keep expressive ASCII props, window interiors, road marks, and wave crests while distant geometry stays as readable color planes.
 - Reduced wet-road and glass reflection glare to preserve static-view silhouettes and road markings.
 - Added close-range resident faces, varied hair and skin colors, blinking eyes, and clearer umbrellas, with bounded sprite sizes and simpler distant crowds.
 - Distributed initial residents across distinct walkable cells and expanded ambient conversations to three turns, with weather-specific lines and remembered encounters.
