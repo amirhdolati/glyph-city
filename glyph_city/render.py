@@ -391,7 +391,9 @@ class Renderer:
         base = bases[tile]
         # Material motifs stay in world space; their contrast fades with
         # distance rather than filling the horizon with tiny texture glyphs.
-        detail=max(0.0,min(1.0,(24.0-dist)/12.0))
+        # Keep a readable middle-distance band: ASCII fades gradually through
+        # the street instead of disappearing immediately after the foreground.
+        detail=max(0.0,min(1.0,(34.0-dist)/20.0))
         motif=grain(math.floor(x*2),math.floor(y*2),self.city.seed)
         joint=min(.12,max(.045,dist/max(self.fx,1.0)*.35))
         relief,ridge=terrain_relief(x,y,self.city.seed)
@@ -406,21 +408,22 @@ class Renderer:
             fg=mix(bg,(141,184,184),.24+.22*max(0,ripple))
             bg=mix(bg,fg,max(0,ripple)*.18)
             # Broad, sparse wave crests leave most of the water quiet.
-            if dist<12 and detail>.2:
+            if dist<24 and detail>.2:
                 ch='~' if ripple>.72 else '-' if ripple>.22 else '.' if ripple<-.72 else ' '
             else:
-                ch='~' if dist<22 and ripple>.985 else ' '
+                ch='~' if dist<34 and ripple>.985 else ' '
         else:
             shade=shadow_band(x,y,self.city.seed)
             bg=scale(base,(.27+.60*day)*shade)
             fg=scale(base,(.58+.58*day)*shade)
             ch=' '
-            if tile=='g' and dist<20:
-                if relief>.73 and motif%3==0: ch='^'
-                elif relief<.25 and motif%4==0: ch=','
-                else: ch=(',',"'",';')[motif%3] if motif%7<2 else ' '
+            if tile=='g' and dist<32:
+                cadence=2 if detail>.65 else 4 if detail>.35 else 8
+                if relief>.73 and motif%cadence==0: ch='^'
+                elif relief<.25 and motif%(cadence+1)==0: ch=','
+                elif detail>.35 and motif%(cadence+2)==0: ch=(',',"'",';')[motif%3]
                 fg=scale((74,131,83),.3+.65*day)
-            elif tile=='p' and dist<22:
+            elif tile=='p' and dist<32:
                 # Offset rectangular paving joints make sidewalks distinct
                 # from asphalt without coating every stone in punctuation.
                 py=y%.9
@@ -443,15 +446,15 @@ class Renderer:
                 if curb_x or curb_y:
                     ch='#' if grain(ix,iy,self.city.seed)%13==0 else '|' if curb_x else '_'
                     fg=scale((181,175,158),.48+.52*day)
-            elif tile=='b' and dist<22:
+            elif tile=='b' and dist<32:
                 # Bridge boards and nails, in contrast to sidewalk joints.
-                ch='=' if y%1.4<joint else ('#' if relief>.78 and dist<12 else
-                    '.' if dist<12 and motif%23==0 else ' ')
+                ch='=' if y%1.4<joint else ('#' if relief>.78 and dist<18 else
+                    '.' if dist<20 and motif%23==0 else ' ')
                 fg=mix(fg,(178,144,100),.25)
-            elif tile=='r' and dist<22:
-                if dist<13 and relief>.78: ch=':'
-                elif dist<11 and relief<.22: ch='.'
-                else: ch='.' if dist<15 and motif%23==0 else ' '
+            elif tile=='r' and dist<32:
+                if dist<20 and relief>.78: ch=':'
+                elif dist<18 and relief<.22: ch='.'
+                else: ch='.' if dist<24 and motif%23==0 else ' '
                 ax=abs(x%24-12); ay=abs(y%24-12)
                 if ax<.09 and int(y/1.7)%3<2 and ay>3:
                     ch='|'; fg=scale((230,190,111),.5+.5*day)
@@ -460,7 +463,7 @@ class Renderer:
                 elif ((3.0<ay<4.1 and ax<2.1) or (3.0<ax<4.1 and ay<2.1)):
                     # Crossings are light bands instead of noisy equals.
                     bg=mix(bg,scale((187,188,168),.35+.65*day),.35)
-                    ch='=' if dist<16 and (int(x*2)+int(y*2))%2==0 else ' '
+                    ch='=' if dist<24 and (int(x*2)+int(y*2))%2==0 else ' '
             if light:
                 bg=mix(bg,(134,97,55),min(.86,light*.78))
                 fg=mix(fg,(246,194,112),min(.92,light*.92))
