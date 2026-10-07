@@ -120,24 +120,128 @@ def local_light(glow, night, lantern=False):
 
 
 def cell(ch, fg, bg):
-    # Small palette steps make color runs cheaper without changing glyph width.
-    return ch, (fg[0]&248,fg[1]&248,fg[2]&248), (bg[0]&248,bg[1]&248,bg[2]&248)
+    # Four-level steps retain dark gradients without excessive ANSI churn.
+    return ch, (fg[0]&252,fg[1]&252,fg[2]&252), (bg[0]&252,bg[1]&252,bg[2]&252)
 
 
 ART = {
-    'tree': ((' .---. ','/     \\','\\_____/','   |   ','   |   ','  /_\\  '),2.6,4.2),
+    'tree': (('   .-oo-.   ',' .o*oooo*o. ','(ooo*oooooo)'," `oo*ooo*-' ",'    Y|     ','    ||     ','   /__\\    '),2.6,4.2),
     'lamp': (('  ___  ',' /___\\ ',' | o | ','  \\|/  ','   |   ','   |   ','   |   ','  _|_  '),.75,3.8),
     'bench': ((' _______ ','|=======|','|_______|',' ||   || '),1.9,.9),
     'flowers': ((' * . * ','\\|/*|/','[=====]',' \\___/ '),1.1,.85),
     'fountain': (('    .    ','  . | .  ',' . \\|/ . ','  \\ | /  ',' ~~~|~~~ ','(=======)',' \\_____/ '),2.8,2.3),
     'rail': (('___________','| | | | | |','|_|_|_|_|_|'),4,.9),
-    'stall': (('  /---\\  ',' /     \\ ',' | tea | ',' |_____| '),2.6,2.2),
+    'stall': (('  /=====\\  ',' /_|_|_|_\\ ',' |  TEA  | ',' | c c c | ',' |=======| ',' | |   | | '),2.6,2.2),
     # People use a wider silhouette so they remain legible in rain and at
     # terminal sizes where a one-column body disappears into facade texture.
     'person': (('  o  ',' /|\\ ',' /|\\ ',' / \\ '),.86,2.05),
-    'car': (('  _____  ',' /_____\\ ','|o_____o|',' |_| |_| '),1.8,1.35),
-    'boat': (('     |     ','  ___|__   ',' /______\\  ',' \\______/  ',' ~~~~~~~~  '),3.5,1.5),
+    'car': (('   _____   ','  /__|__\\  ',' /_______\\ ','|O==[ ]==O|',' \\_______/ ','  []   []  '),1.8,1.35),
+    'boat': (('     |      ','  ___|___   ',' | [] [] |  ','_|_______|_ ','\\_________/ ',' ~-~-~-~-~  '),3.5,1.5),
 }
+
+# The few marks that identify an object survive when its projected size is
+# too small for the detailed drawing. These are actual silhouettes, not dots.
+COMPACT_ART = {
+    'tree': (' ,^, ', '(;*;)', '  Y  ', ' /|\\ '),
+    'lamp': ('[_]', ' | ', '_|_'),
+    'bench': ('[===]', ' |_| '),
+    'flowers': ('*;*', '[_]'),
+    'fountain': (' \\|/ ', '(~~~)', ' \\_/ '),
+    'rail': ('=====', '| | |'),
+    'stall': ('/===\\', '|TEA|', '|___|'),
+    'car': ('/[_]\\', 'O===O', '[] []'),
+    'boat': (' _|_ ', '|[]|_', '\\___/'),
+}
+
+# Close views use more authored information, rather than magnifying the
+# seven-row crown or repeating the same bench slat across several rows.
+DETAIL_ART = {
+    'tree': (
+        '        .--.         ',
+        '    .-o*;.o;-.       ',
+        '  .;o;:*o;.*o;-.     ',
+        ' .o*;o.;o:;o.*o;.    ',
+        '(;o.;*o;:o;.;o*;o)   ',
+        '(o;:*o.;o:*;o.;*;.)  ',
+        ' `o;.;o*;o.;*o;:o;\'  ',
+        '  `-o;:*o.;o;*o-\'    ',
+        '     `-;\\|/;-\'      ',
+        '        \\|/          ',
+        '         ||          ',
+        '         |:          ',
+        '         ||          ',
+        '        /|\\          ',
+        '      _/___\\_        ',
+    ),
+    'bench': (
+        ' .-----------------. ',
+        ' |=================| ',
+        ' |-----------------| ',
+        ' |=================| ',
+        '/|_________________|\\',
+        '|___________________|',
+        '  ||             ||  ',
+        ' _||_           _||_ ',
+    ),
+    'flowers': (
+        '   *     .    *   ',
+        ' . |  *  | . / . ',
+        '  \\| / \\|/|/ /  ',
+        '   \\|/  |/ |/   ',
+        ' .--------------. ',
+        ' |==============| ',
+        '  \\ : . : . : /  ',
+        '   \\_________/   ',
+    ),
+    'fountain': (
+        '          .          ',
+        '       .  |  .       ',
+        '     .  \\ | /  .     ',
+        '    .    \\|/    .    ',
+        '   .   .--|--.   .   ',
+        '       \\__|__/       ',
+        '    .     |     .    ',
+        '  .    .  |  .    .  ',
+        ' .-----------------. ',
+        '( ~ ~ ~ ~ | ~ ~ ~ ~ )',
+        ' \\=================/ ',
+        '  \\_______________/  ',
+    ),
+}
+
+PROP_NAMES = {'tree':'Tree / leafy canopy', 'lamp':'Street lamp',
+              'bench':'Wooden bench', 'flowers':'Flower planter',
+              'fountain':'Fountain', 'rail':'Canal railing',
+              'stall':'Tea stall', 'car':'Car', 'boat':'Canal boat'}
+GROUND_NAMES = {'r':'Road / asphalt', 'p':'Sidewalk / paving stones',
+                'g':'Grass', 'b':'Bridge / wooden deck', 'w':'Canal / water'}
+SHOP_NAMES = {'CAFE':'Cafe', 'BAKERY':'Bakery', 'RAMEN':'Ramen restaurant',
+              'TEA':'Tea shop', 'BOOKS':'Bookshop', 'VINYL':'Record shop',
+              'FLORA':'Florist', 'HOTEL':'Hotel', 'JAZZ':'Jazz club',
+              'BAR':'Bar', 'LOUNGE':'Lounge', '18+':'Nightclub'}
+
+
+def sprite_character(art, x, y, width, height):
+    """Scale strokes, but draw eyes, leaves and lettering only once per cell.
+
+    A slash becomes a diagonal through its enlarged cell instead of a block
+    of //////. Thin rails and poles keep their single-character weight.
+    """
+    aw=max(map(len,art)); ah=len(art)
+    u=x*aw/width; v=y*ah/height
+    ac=min(aw-1,max(0,int(u))); ar=min(ah-1,max(0,int(v)))
+    ch=art[ar][ac] if ac<len(art[ar]) else ' '
+    cw,chh=width/aw,height/ah
+    if cw>1.0:
+        center=(ac+.5)*cw
+        if ch in '/\\':
+            center=(ac+(1-(v-ar) if ch=='/' else v-ar))*cw
+        if ch not in (' ','-','_','=') and not -.5<=x-center<.5:
+            return ' ',ar
+    if chh>1.0 and ch not in (' ','|','/', '\\',':'):
+        if not -.5<=y-(ar+.5)*chh<.5:
+            return ' ',ar
+    return ch,ar
 
 PERSON_COLORS = {
     'barista': (245, 165, 105),
@@ -161,6 +265,16 @@ class Renderer:
         # Keyed by the stable Prop object identity.  A renderer is recreated
         # on resize, which also clears this frame-local hysteresis state.
         self._sprite_lod = {}
+        self._sun_cache = {}
+        self._sun_key = None
+
+    def _light_at(self, x, y):
+        """Bilinear lamp falloff: no square patches as the camera drifts."""
+        x=max(0.0,min(SIZE-1.001,x-.5)); y=max(0.0,min(SIZE-1.001,y-.5))
+        ix,iy=int(x),int(y); u,v=x-ix,y-iy
+        grid=self.city.glow
+        return ((grid[iy][ix]*(1-u)+grid[iy][ix+1]*u)*(1-v)
+                +(grid[iy+1][ix]*(1-u)+grid[iy+1][ix+1]*u)*v)
 
     def sprite_lod(self, prop, distance):
         """Return 0 for compact distant decoration art, 1 for full art.
@@ -195,6 +309,12 @@ class Renderer:
         self.day = day = max(0,min(1,(elevation+.12)*1.65))
         contrast=max(.5,min(2.0,float(getattr(world,'night_contrast',1.0))))
         self.night=max(0.0,min(1.0,.5+(1-day-.5)*contrast))
+        sun_key=(id(city),round(world.clock*10))
+        if sun_key!=self._sun_key:
+            self._sun_key=sun_key; self._sun_cache.clear()
+        sun_az=(world.clock-6)/24*TAU
+        self.sun_direction=(math.cos(sun_az),math.sin(sun_az))
+        self.sun_slope=max(.18,elevation*.9)
         self.sunset = max(0,1-abs(elevation)/.4)*(1-world.cloud*.6)
         self.fog = mix((12,23,40),(105,142,162),day)
         self.fog = mix(self.fog,(161,102,107),self.sunset*.5)
@@ -209,12 +329,14 @@ class Renderer:
         self.buffer = buf = [[(' ',(0,0,0),(0,0,0)) for _ in range(cols)] for _ in range(rows)]
         self.depth = depths = [[FAR*2]*cols for _ in range(rows)]
         self.surface = [[-1]*cols for _ in range(rows)]
+        self._labels = []
+        self._sprite_owner = [[None]*cols for _ in range(rows)]
+        self._emission = []
         ground_tiles = [[None]*cols for _ in range(rows)]
         ground_coords = [[None]*cols for _ in range(rows)]
-        reflection_depth = [[FAR*2]*cols for _ in range(rows)]
-        reflection_tick_value = reflection_tick(world.time)
-        top = mix((4,8,22),(38,83,124),day)
-        low = mix((14,25,43),(157,185,185),day)
+        ray_hits = []
+        top = mix((4,8,22),(52,92,132),day)
+        low = mix((14,25,43),(169,192,206),day)
         low = mix(low,(231,143,115),self.sunset*.8)
         top, low = mix(top,self.fog,world.cloud*.45),mix(low,self.fog,world.cloud*.5)
         flash=0.0
@@ -233,11 +355,15 @@ class Renderer:
                     cloud = (math.sin(az*5+world.time*.008+ratio*6)
                              +.5*math.sin(az*13-ratio*11+world.time*.015))
                     ch, fg, cbg = ' ',scale(bg,1.2),bg
-                    if .17 < ratio < .76 and cloud > 1.1-world.cloud*.75:
-                        fg = mix(bg,(206,199,186),.22+.28*day)
-                        # Cloud mass reads through its color, not a sheet of
-                        # repeated dots and tildes behind the buildings.
-                        cbg = mix(bg,fg,.28)
+                    density=max(0.0,min(1.0,(cloud-(1.1-world.cloud*.75))*.85))
+                    density*=max(0.0,1-((ratio-.47)/.34)**2)
+                    if density>0:
+                        # Smooth cloud density avoids hard rectangular banks.
+                        cloud_color=mix((54,68,88),(207,215,218),day)
+                        cbg=mix(bg,cloud_color,density*(.20+.18*world.cloud))
+                        fg=mix(cbg,cloud_color,.22)
+                        if .05<density<.16 and grain(int(az*90),int(ratio*40),city.seed)%7==0:
+                            ch='~'
                     elif self.night>.6 and world.cloud<.5:
                         star = grain(int((az%TAU)*135),int(ratio*65),self.city.seed)
                         if star%127==0:
@@ -256,6 +382,7 @@ class Renderer:
         self._celestial(elevation)
         for c,(dx,dy) in enumerate(rays):
             hits = self._cast(world.x,world.y,dx,dy)
+            ray_hits.append(hits)
             # Visit near surfaces first; shade distant cells only if visible.
             for dist,side,bid,hx,hy in hits:
                 b = city.buildings[bid]
@@ -283,36 +410,190 @@ class Renderer:
                     buf[r][c] = cell(ch,fg,bg)
                     depths[r][c] = dist
                     self.surface[r][c] = bid
-                    # The projected reflection lands on the ground cell below
-                    # this wall pixel. Gate it by that ground material so a
-                    # bright window cannot paint a reflection over grass.
-                    rr = round(horizon+(z+eye)*self.fy/dist)
-                    if emits and world.wet>.05 and 0 <= rr < rows:
-                        tile = ground_tiles[rr][c]
-                        strength = REFLECTION_MASK.get(tile, 0.0)
-                        coords = ground_coords[rr][c]
-                        if strength and coords is not None:
-                            rx,ry = coords
-                            if (self.surface[rr][c]<0 and dist<reflection_depth[rr][c]
-                                    and dist<32
-                                    and reflection_noise(rx,ry,city.seed,reflection_tick_value)%9<2):
-                                oldch,oldfg,oldbg = buf[rr][c]
-                                # Reflections are glints on the pavement, not
-                                # a second opaque wall. Preserve lane marks,
-                                # sprites and existing road texture.
-                                if oldch in (' ','.',':','~'):
-                                    alpha = world.wet*strength*(.045+.11*self.night)
-                                    buf[rr][c] = cell(oldch,
-                                                      mix(oldfg,fg,alpha),
-                                                      mix(oldbg,fg,alpha*.22))
-                                    reflection_depth[rr][c] = dist
+                    if emits and self.night>.15:
+                        self._emission.append((r,c,dist,fg,.035))
+        self._roofs(rays,ray_hits)
+        self._reflections(rays,ray_hits,ground_tiles,ground_coords)
         self._building_edges()
         self._signs(ca,sa)
+        self._contact_shadows(ca,sa,ground_tiles)
         for prop in sorted(city.props,key=lambda p: -((p.x-world.x)**2+(p.y-world.y)**2)):
             self._sprite(prop,ca,sa)
+        self._halation()
         self._weather()
+        self._grade()
+        self._draw_labels()
+        if getattr(world,'identify',False):
+            self._identify_overlay(ray_hits,ground_tiles)
         if minimap: self._minimap()
         return buf
+
+    def _roofs(self, rays, hits):
+        """Intersect roof planes so elevated shots see solid buildings."""
+        if self.eye<=3.15: return
+        for c,(dx,dy) in enumerate(rays):
+            for entry,_,bid,_,_ in hits[c]:
+                b=self.city.buildings[bid]
+                if b.height>=self.eye: continue
+                start=max(0,math.ceil(self.horizon-.5))
+                end=min(self.rows,math.ceil(self.horizon+(self.eye-b.height)*self.fy/entry))
+                for r in range(start,end):
+                    offset=r+.5-self.horizon
+                    if offset<=0: continue
+                    distance=(self.eye-b.height)*self.fy/offset
+                    if distance>=self.depth[r][c]: continue
+                    x=self.world.x+dx*distance; y=self.world.y+dy*distance
+                    if not (b.x0<=x<b.x1 and b.y0<=y<b.y1): continue
+                    edge=min(x-b.x0,b.x1-x,y-b.y0,b.y1-y)
+                    ch='_' if edge<.18 else '-' if y%1.8<.075 else '.' if grain(int(x*3),int(y*3),b.seed)%19==0 else ' '
+                    color=mix(b.color,(77,95,112),.65)
+                    bg=scale(color,.32+.48*self.day)
+                    fg=scale(color,.65+.5*self.day)
+                    fog=fog_factor(distance,self.visibility)
+                    self.buffer[r][c]=cell(ch,mix(fg,self.fog,fog),mix(bg,self.fog,fog*.65))
+                    self.depth[r][c]=distance; self.surface[r][c]=bid
+
+    def _halation(self):
+        """A bounded glow around lights, clipped by foreground geometry."""
+        if self.night<.15: return
+        glow={}
+        for r,c,z,color,amount in self._emission:
+            if self.depth[r][c]<z-.12: continue
+            for dy,dx,falloff in ((0,-1,1),(0,1,1),(-1,0,.7),(1,0,.7),
+                                  (0,-2,.35),(0,2,.35)):
+                y,x=r+dy,c+dx
+                if not (0<=x<self.cols and 0<=y<self.rows): continue
+                if self.depth[y][x]<z-.35: continue
+                strength=amount*falloff*self.night
+                prior=glow.get((y,x))
+                if prior is None or strength>prior[0]: glow[y,x]=(strength,color)
+        for (y,x),(amount,color) in glow.items():
+            ch,fg,bg=self.buffer[y][x]
+            self.buffer[y][x]=cell(ch,mix(fg,color,amount),mix(bg,color,amount))
+
+    def _contact_shadows(self, ca, sa, tiles):
+        """Small soft ground shadows anchor props without obscuring paving."""
+        radii={'tree':1.15,'lamp':.28,'bench':.9,'flowers':.5,
+               'fountain':1.25,'stall':1.15,'person':.28,'car':.9}
+        for p in self.city.props:
+            radius=radii.get(p.kind)
+            if radius is None: continue
+            dx,dy=p.x-self.world.x,p.y-self.world.y
+            z=dx*ca+dy*sa
+            if z<1 or z>28: continue
+            x=self.cols/2+(-dx*sa+dy*ca)*self.fx/z
+            y=self.horizon+self.eye*self.fy/z
+            rx=max(1.,radius*self.fx/z)
+            ry=max(.6,self.eye*self.fy*radius/(z*z))
+            for r in range(max(0,math.floor(y-ry)),min(self.rows,math.ceil(y+ry))):
+                for c in range(max(0,math.floor(x-rx)),min(self.cols,math.ceil(x+rx))):
+                    if self.surface[r][c]>=0 or tiles[r][c] in (None,'w'): continue
+                    d=((c+.5-x)/rx)**2+((r+.5-y)/ry)**2
+                    if d>=1: continue
+                    ch,fg,bg=self.buffer[r][c]
+                    shade=1-(1-d)*(.12+.06*self.day)
+                    self.buffer[r][c]=cell(ch,scale(fg,shade),scale(bg,shade))
+
+    def _identify_overlay(self, ray_hits, ground_tiles):
+        """Give the viewer a quiet readable key for the current composition."""
+        center=min(self.cols-1,max(0,self.cols//2))
+        objects=[]
+        if ray_hits and ray_hits[center]:
+            _,_,bid,*_=ray_hits[center][0]
+            building=self.city.buildings[bid]
+            objects.append(SHOP_NAMES.get(building.sign,building.sign.title()))
+        row=min(self.rows-1,max(0,int(self.horizon+5)))
+        tile=ground_tiles[row][center] if ground_tiles else None
+        if tile in GROUND_NAMES:
+            objects.append(GROUND_NAMES[tile])
+        if objects:
+            text='  /  '.join(objects)
+        else:
+            text='Look around: named objects are highlighted'
+        line=(' B IDENTIFY  |  '+text+'  |  B closes ').center(self.cols)
+        overlay(self.buffer,[line[:self.cols]],0,0,(228,220,172),(18,25,31))
+
+    def _draw_labels(self):
+        """Label only visible objects and leave room between captions."""
+        occupied=set()
+        visible={owner for row in self._sprite_owner for owner in row if owner is not None}
+        labels=(item for item in sorted(self._labels) if item[-1] in visible)
+        count=0
+        for z,sx,top,label,speech,owner in labels:
+            if count>=8: break
+            text=label[:max(1,min(32,self.cols-2))]
+            x=max(1,min(self.cols-len(text)-1,round(sx-len(text)/2)))
+            for y in (math.floor(top)-1,math.floor(top)-2):
+                if not 2<=y<self.rows-1: continue
+                cells={(xx,yy) for yy in (y-1,y,y+1)
+                       for xx in range(max(0,x-1),min(self.cols,x+len(text)+1))}
+                if cells & occupied: continue
+                if any(self.depth[y][xx]<z-.1 for xx in range(x,x+len(text))): continue
+                overlay(self.buffer,[text],x,y,(215,226,210),(17,27,33))
+                occupied.update(cells)
+                count+=1
+                if speech and y>2:
+                    quote=('"'+speech+'"')[:self.cols-2]
+                    qx=max(1,min(self.cols-len(quote)-1,round(sx-len(quote)/2)))
+                    if all(self.depth[y-1][xx]>=z-.1 for xx in range(qx,qx+len(quote))):
+                        overlay(self.buffer,[quote],qx,y-1,(242,209,161),(17,27,33))
+                        occupied.update((xx,yy) for yy in (y-2,y-1,y) for xx in range(qx,qx+len(quote)))
+                break
+
+    def _reflections(self, rays, hits, tiles, coords):
+        """Trace the city from a camera mirrored below the ground plane.
+
+        Reuse the wall rays; the reflected height is sampled independently
+        of the visible facade, so even offscreen windows reflect correctly.
+        Water always reflects. Pavement reveals the reflection in puddles.
+        """
+        w=self.world
+        for r in range(max(0,int(self.horizon)+1),self.rows):
+            slope=(r+.5-self.horizon)/self.fy
+            for c in range(self.cols):
+                tile=tiles[r][c]
+                if self.surface[r][c]>=0 or tile not in REFLECTION_MASK: continue
+                wet=1.0 if tile=='w' else w.wet
+                if wet<.04 or coords[r][c] is None: continue
+                x,y=coords[r][c]
+                wave=math.sin(y*3.2+x*.65-w.time*.65)
+                ripple=.5+.5*wave
+                pool=.5+.28*math.sin(x*1.7+y*.47)+.22*math.sin(y*2.1-x*.6)
+                strength=REFLECTION_MASK[tile]*wet
+                strength*=.52+.24*ripple if tile=='w' else .08+.62*pool*pool
+                # Water bends the reflected columns; pavement stays still.
+                rc=max(0,min(self.cols-1,c+round(wave*1.2))) if tile=='w' else c
+                dx,dy=rays[rc]
+                ground_dist=self.depth[r][c]
+                for dist,side,bid,hx,hy in hits[rc]:
+                    if dist<ground_dist-.05: continue
+                    b=self.city.buildings[bid]
+                    z=slope*dist-self.eye
+                    if z>b.height: continue
+                    if z<0: break
+                    u=(hy-b.y0 if dx>0 else b.y1-hy) if side==0 else (b.x1-hx if dy>0 else hx-b.x0)
+                    span=b.y1-b.y0 if side==0 else b.x1-b.x0
+                    ch,fg,bg,emits=self._facade(b,u,z,span,side,dist)
+                    if .35<z<2.08 and .22<u<span-.22:
+                        fg=mix((241,183,112),b.neon,.25)
+                        bg=scale(fg,.22); emits=True
+                    old,ofg,obg=self.buffer[r][c]
+                    alpha=strength*(.64 if emits else .28)*(1-min(.65,dist/110))
+                    tint=mix(bg,fg,.5 if emits else .15)
+                    mark=old
+                    if old in (' ','.',':','~','-') and emits and strength>.13:
+                        mark='~' if tile=='w' and ripple>.58 else '-' if pool>.52 else '.'
+                    self.buffer[r][c]=cell(mark,mix(ofg,fg,alpha),mix(obg,tint,alpha*.85))
+                    break
+
+    def _grade(self):
+        """A quiet edge falloff keeps attention inside the composition."""
+        for r,row in enumerate(self.buffer):
+            vy=((r+.5)/self.rows-.48)*2
+            for c,(ch,fg,bg) in enumerate(row):
+                vx=((c+.5)/self.cols-.5)*2
+                vignette=1-.12*max(0,vx*vx+vy*vy-.35)
+                row[c]=cell(ch,scale(fg,vignette),scale(bg,vignette))
 
     def _building_edges(self):
         """Add a restrained silhouette line where a projected wall ends.
@@ -386,8 +667,8 @@ class Renderer:
             return cell(' ',scale(self.fog,.9),scale(self.fog,.7))
         tile = self.city.tiles[iy][ix]
         h = grain(int(x*9),int(y*9),self.city.seed)
-        light = local_light(self.city.glow[iy][ix],night,w.lantern and dist<9)
-        bases = {'r':(58,68,78),'p':(108,106,99),'g':(45,91,68),'b':(119,103,82),'w':(34,84,103)}
+        light = local_light(self._light_at(x,y),night,w.lantern and dist<9)
+        bases = {'r':(43,53,65),'p':(125,122,113),'g':(45,91,68),'b':(119,103,82),'w':(34,84,103)}
         base = bases[tile]
         # Material motifs stay in world space; their contrast fades with
         # distance rather than filling the horizon with tiny texture glyphs.
@@ -395,7 +676,7 @@ class Renderer:
         # the street instead of disappearing immediately after the foreground.
         detail=max(0.0,min(1.0,(34.0-dist)/20.0))
         motif=grain(math.floor(x*2),math.floor(y*2),self.city.seed)
-        joint=min(.12,max(.045,dist/max(self.fx,1.0)*.35))
+        joint=min(.18,max(.055,dist/max(self.fx,1.0)*.55))
         relief,ridge=terrain_relief(x,y,self.city.seed)
         # A soft directional key light makes the relief readable without
         # turning every foreground cell into a bright outline.
@@ -404,8 +685,8 @@ class Renderer:
         relief_light=max(-1.0,min(1.0,key*.5+ridge*.35))
         if tile=='w':
             ripple=math.sin(x*.65+y*.45+w.time*.55)
-            bg=mix(scale(base,.28+.72*day),self.fog,.18)
-            fg=mix(bg,(141,184,184),.24+.22*max(0,ripple))
+            bg=mix(scale(base,.19+.65*day),self.fog,.22)
+            fg=mix(bg,(115,164,177),.18+.24*max(0,ripple))
             bg=mix(bg,fg,max(0,ripple)*.18)
             # Broad, sparse wave crests leave most of the water quiet.
             if dist<24 and detail>.2:
@@ -414,8 +695,12 @@ class Renderer:
                 ch='~' if dist<34 and ripple>.985 else ' '
         else:
             shade=shadow_band(x,y,self.city.seed)
+            sun=self._ground_sun(ix,iy) if day>.2 else 1.
+            shade*=.72+.28*sun
             bg=scale(base,(.27+.60*day)*shade)
             fg=scale(base,(.58+.58*day)*shade)
+            if sun<1:
+                bg=mix(bg,(29,43,61),(1-sun)*day*.18)
             ch=' '
             if tile=='g' and dist<32:
                 cadence=2 if detail>.65 else 4 if detail>.35 else 8
@@ -426,17 +711,17 @@ class Renderer:
             elif tile=='p' and dist<32:
                 # Offset rectangular paving joints make sidewalks distinct
                 # from asphalt without coating every stone in punctuation.
-                py=y%.9
-                px=(x+(math.floor(y/.9)%2)*.8)%1.6
+                py=y%1.2
+                px=(x+(math.floor(y/1.2)%2)*1.0)%2.0
                 horizontal=py<joint
                 vertical=px<joint
                 ch='+' if horizontal and vertical else '_' if horizontal else '|' if vertical else ' '
-                block=grain(math.floor((x+(math.floor(y/.9)%2)*.8)/1.6),
-                            math.floor(y/.9),self.city.seed)
+                block=grain(math.floor((x+(math.floor(y/1.2)%2)*1.0)/2.0),
+                            math.floor(y/1.2),self.city.seed)
                 bg=scale(bg,.97+(block%3)*.03)
                 fg=mix(fg,(168,153,122),.18)
                 if not (horizontal or vertical) and detail>.25:
-                    ch='.' if relief<.28 else ':' if relief>.72 else ' '
+                    ch='.' if relief<.18 else ':' if relief>.84 else ' '
                     fg=mix(fg,(212,198,160),.16*detail)
                 # A thin curb and occasional drain locate the road edge.
                 curb_x=((ix>0 and self.city.tiles[iy][ix-1]=='r' and x%1<.12)
@@ -452,8 +737,8 @@ class Renderer:
                     '.' if dist<20 and motif%23==0 else ' ')
                 fg=mix(fg,(178,144,100),.25)
             elif tile=='r' and dist<32:
-                if dist<20 and relief>.78: ch=':'
-                elif dist<18 and relief<.22: ch='.'
+                if dist<20 and relief>.84 and motif%3==0: ch=':'
+                elif dist<18 and relief<.17 and motif%3==0: ch='.'
                 else: ch='.' if dist<24 and motif%23==0 else ' '
                 ax=abs(x%24-12); ay=abs(y%24-12)
                 if ax<.09 and int(y/1.7)%3<2 and ay>3:
@@ -465,8 +750,8 @@ class Renderer:
                     bg=mix(bg,scale((187,188,168),.35+.65*day),.35)
                     ch='=' if dist<24 and (int(x*2)+int(y*2))%2==0 else ' '
             if light:
-                bg=mix(bg,(134,97,55),min(.86,light*.78))
-                fg=mix(fg,(246,194,112),min(.92,light*.92))
+                bg=mix(bg,(117,83,48),min(.58,light*.42))
+                fg=mix(fg,(233,182,108),min(.78,light*.68))
             wetness = WETNESS_MASK.get(tile, 0.0)
             if w.wet>.03 and wetness:
                 wet = w.wet * wetness
@@ -487,12 +772,31 @@ class Renderer:
         fog=fog_factor(dist,self.visibility)
         return cell(ch,mix(fg,self.fog,fog*.72),mix(bg,self.fog,fog*.52))
 
+    def _ground_sun(self, x, y):
+        """Cached building shadows give the street a directional light source."""
+        key=(x,y)
+        if key in self._sun_cache: return self._sun_cache[key]
+        sx,sy=self.sun_direction
+        light=1.
+        for distance in (2,4,7,11,16):
+            ix,iy=math.floor(x+.5+sx*distance),math.floor(y+.5+sy*distance)
+            if not (0<=ix<SIZE and 0<=iy<SIZE): break
+            bid=self.city.walls[iy][ix]
+            if bid>=0 and self.city.buildings[bid].height>distance*self.sun_slope:
+                light=.15; break
+        self._sun_cache[key]=light
+        return light
+
     def _shop_glass(self,b,u,z,span,depth,direction,dist):
+        door=abs(u-span/2)
+        if door<.44 and z<1.95:
+            ch='|' if door>.32 else '_' if z<.5 or z>1.82 else '|' if .20<u-span/2<.26 and .9<z<1.14 else ' '
+            return ch,(187,173,139),(19,30,36),False
         panes=max(1,round(span/3))
         pane=span/panes
         seam=min(u%pane,pane-u%pane)
-        if seam<.035 or z<.29 or z>2.055:
-            return ('|' if seam<.035 else '-',(139,165,167),(25,36,41),False)
+        if seam<.075 or z<.29 or z>2.055:
+            return ('|' if seam<.075 else '-',(139,165,167),(25,36,41),False)
         if dist<28:
             ch,fg,bg=room_pixel(b.sign,span,depth,u,z,direction)
             # Preserve a few recognizable interior marks at middle distance,
@@ -503,9 +807,26 @@ class Renderer:
             ch,fg,bg=' ',(174,148,111),(60,48,39)
         length=math.hypot(direction[0],direction[1])
         grazing=1-direction[1]/max(length,1e-6)
-        reflection=.025+.11*grazing**3
+        reflection=.06+.24*grazing**3
         fg=mix(fg,(131,174,191),reflection)
         bg=mix(bg,self.fog,reflection)
+        # Vertical framing and a recessed transom turn an opaque rectangle
+        # into a storefront with glass, structural piers and a display sill.
+        if seam<.15:
+            return '|',scale(b.color,.65+.35*self.day),scale(b.color,.22),False
+        if 1.77<z<1.84:
+            return '-',scale(b.neon,.42),(27,35,41),False
+        # Recessed pane edges and a sill give glass thickness and scale.
+        edge=min(1.0,seam/.19,max(0.0,(z-.35)/.18))
+        bg=scale(bg,.60+.40*edge)
+        if seam<.085:
+            ch='|'; fg=(80,111,122); bg=scale(bg,.55)
+        elif z<.47:
+            ch='_'; fg=(151,134,106); bg=scale(bg,.65)
+        elif z>1.94:
+            ch='_'; fg=scale(b.neon,.60); bg=scale(bg,.70)
+        elif .47<z<.65:
+            ch='='; fg=scale(b.neon,.45); bg=scale(bg,.7)
         # A narrow continuous streak leaves most of the view transparent.
         if abs((u/pane)%1-(.2+z*.08))<.012:
             fg=mix(fg,(203,225,230),.32)
@@ -517,12 +838,17 @@ class Renderer:
         day,night = self.day,self.night
         # Keep near wall edges above the night fog floor so building shapes
         # read as planes instead of dissolving into the background.
-        shade=(.58+.64*day)*(1 if side else .90)
+        sx,sy=self.sun_direction
+        normal=(1 if self.world.y>b.y1 else -1) if side else (1 if self.world.x>b.x1 else -1)
+        facing=max(0.,normal*(sy if side else sx))
+        shade=(.60+.55*day)*(.77+.33*facing)
         if self.world.lantern: shade+=max(0,1-dist/9)*.38
         base=mix(b.color,(224,153,101),self.sunset*.2)
-        fg,bg=scale(base,shade),scale(base,shade*(.36+.10*day))
+        base=mix(base,(220,192,149),day*facing*.15)
+        base=mix(base,(85,111,140),day*(1-facing)*.16)
+        fg,bg=scale(base,shade),scale(base,shade*(.40+.10*day))
         bay=u%1.65; story=int(z/2.8); level=z%2.8
-        facade_detail=max(0.0,min(1.0,(34.0-dist)/18.0))
+        facade_detail=max(0.0,min(1.0,(42.0-dist)/24.0))
         window_seed=grain(int(u/1.65),story,b.seed)
         emits=False
         if b.height-z<.23:
@@ -544,30 +870,52 @@ class Renderer:
                 ch='|' if facade_detail>.48 and .82<level<1.98 else '-' if facade_detail>.28 else ' '
                 fg=scale(base,shade*.82); bg=scale((24,29,38),.8)
             elif lit:
-                glow=mix((255,190,92),b.neon,.2)
-                glass=mix((20,27,38),glow,.26+.12*night)
-                fg=scale(glow,.9+.3*night); bg=scale(glass,.78)
-                if facade_detail>.68:
-                    ch='O' if window_seed%5 else 'o'
-                elif facade_detail>.32:
-                    ch='o' if window_seed%3 else ' '
-                else:
-                    ch=' '
+                glow=mix((241,183,111),b.neon,.12)
+                # Each room has a stable exposure, curtains and a dark sill.
+                room_gain=.62+(window_seed%7)*.045
+                fg=scale(glow,room_gain)
+                bg=scale(glow,(.19+.10*night)*room_gain)
+                ch=' '
+                if facade_detail>.32:
+                    if bay<.49 or bay>1.16:
+                        ch='|'; fg=scale(glow,.46); bg=scale(bg,.68)
+                    elif level<1.04:
+                        ch='_'; fg=scale(glow,.48); bg=scale(bg,.55)
+                    elif window_seed%4==0 and .72<bay<1.0 and level<1.50:
+                        ch='i'; fg=scale(glow,.23)
+                    elif level>1.75:
+                        ch='-'; fg=scale(glow,.75)
+                    else:
+                        ch='+' if abs(bay-.825)<.13 else ':'
+                        fg=scale(glow,.75)
                 emits=True
             else:
-                ch='.' if facade_detail>.48 and window_seed%3==0 else ' '
-                fg=mix((49,89,119),self.fog,.25); bg=scale(fg,.25)
+                ch='/' if facade_detail>.48 and abs(bay-.4-level*.18)<.065 else ' '
+                fg=mix((63,107,134),self.fog,.25); bg=scale(fg,.26+.045*level)
         elif story==0 and abs(u-span/2)<.42 and z<1.9:
-            ch='|' if abs(u-span/2)>.3 else 'D' if facade_detail>.35 else '.'
+            ch='|' if abs(u-span/2)>.3 else '_' if z<.35 else ' '
             fg=scale(b.neon,.45); bg=(14,18,24)
         else:
             ch=' '
+            if facade_detail>.35:
+                # Brick courses, stone joints and pilasters follow world
+                # coordinates, with quiet mortar rather than random speckle.
+                course=int(z/.28)
+                if z%.28<.035:
+                    ch='-'; fg=mix(bg,fg,.36)
+                elif (u+(course%2)*.36)%.72<.045:
+                    ch=':'; fg=mix(bg,fg,.32)
+                elif grain(int(u*7),int(z*7),b.seed)%7<2:
+                    ch='.'; fg=mix(bg,fg,.58)
+                if u<.15 or u>span-.15:
+                    ch='|'; fg=scale(base,shade*1.18)
+                bg=scale(bg,.92+.08*math.sin(u*.7+b.seed))
         if hx is not None and hy is not None and not emits:
             ix,iy=math.floor(hx),math.floor(hy)
             if 0<=ix<SIZE and 0<=iy<SIZE:
                 # Street lamps graze only the lower facade. The source stays
                 # in world space, so camera motion cannot make it shimmer.
-                bounce=local_light(self.city.glow[iy][ix],night)*math.exp(-max(0,z)/6)
+                bounce=local_light(self._light_at(hx,hy),night)*math.exp(-max(0,z)/4)
                 fg=mix(fg,(230,166,99),min(.44,bounce*.34))
                 bg=mix(bg,(105,68,43),min(.31,bounce*.22))
         fog=fog_factor(dist,self.visibility,.72)
@@ -596,6 +944,7 @@ class Renderer:
                     c=cx-len(b.sign)//2+i
                     if 0<=c<self.cols and self.surface[r][c]==bid:
                         self.buffer[r][c]=cell(ch,b.neon,scale(b.neon,.13))
+                        self._emission.append((r,c,self.depth[r][c],b.neon,.075))
 
     def _celestial(self, elevation):
         w=self.world
@@ -623,115 +972,147 @@ class Renderer:
         if z<.35 or z>48: return
         lateral=-dx*sa+dy*ca
         lod = self.sprite_lod(p, z)
-        art,width,height = LOD_ART[p.kind] if lod == 0 else ART[p.kind]
+        art,width,height = ART[p.kind]
+        projected=height*self.fy/z
+        if p.kind!='person' and (lod==0 or projected<len(art)*.72):
+            art=COMPACT_ART.get(p.kind,art)
+        elif p.kind in DETAIL_ART and projected>=len(DETAIL_ART[p.kind])*.8:
+            art=DETAIL_ART[p.kind]
         person_scale=1.0
+        close_detail=False
         if p.kind=='person':
-            pose=int(self.world.time*3+p.phase)%2
-            if p.umbrella:
-                art=(' .---. ','/_____\\','|  o  |','  /|\\  ','  / \\  '); width=1.08; height=2.2
-            elif p.activity=='walking':
-                art=('  o  ',' /|\\ ',' /|  ' if pose else '  |\\ ',' / \\ ')
-            elif p.activity in ('reading','sorting books'):
-                art=('  o  ',' [=] ','  |  ',' / \\ ')
-            elif p.activity=='playing music':
-                art=('  o  ',' /|D ',' /|  ',' / \\ ')
-            elif p.activity=='taking photos':
-                art=('  o  ',' [o] ','  |  ',' / \\ ')
-            elif p.activity=='tending flowers':
-                art=('   ',' o_','/|/','/ \\'); height=1.2
-            # Use one small readable face at very close range. More elaborate
-            # hair and eye art multiplied across terminal cells and made the
-            # whole fixed camera composition noisy.
-            close_detail=height*self.fy/max(z,.35)>=10.0
-            if close_detail and p.umbrella:
-                art=(' .-. ','/___\\',' (o) ',' /|\\ ',' / \\ ')
-            elif close_detail:
-                art=(' ^ ','(o)','/|\\','/ \\ ')
-                width=.82; height=1.95
-            # Crowd LOD keeps a fixed composition readable. Far residents
-            # remain visible as moving beacons, while only nearby residents
-            # spend cells on faces and clothing detail.
-            if z>30:
-                art=('.' if not p.umbrella else '-',); width=.42; height=.72
-            elif z>16 and not close_detail:
+            pose=int(self.world.time*2.4+p.phase)%2
+            close_detail=projected>=6
+            role=getattr(p,'role','')
+            activity=getattr(p,'activity','')
+            if close_detail:
+                art=(' .-. ',' (o) ',' /|\\ ',' |:| ',' / \\ ','_/ \\_')
+                width=.90; height=1.95
+                # Props remain visible up close, when they matter most.
+                if activity in ('reading','sorting books') or role=='bookseller':
+                    art=(' .-. ',' (o) ',' /[=]',' | | ',' / \\ ','_/ \\_')
+                elif activity=='playing music' or role=='musician':
+                    art=(' .-. ',' (o) ',' /|D ',' |/o ',' / \\ ','_/ \\_')
+                elif activity=='taking photos' or role=='photographer':
+                    art=(' .-. ',' (o) ','-[o]-',' |:| ',' / \\ ','_/ \\_')
+                elif role=='courier':
+                    art=(' ___ ',' (o) ',' /|[]',' |:[]',' / \\ ','_/ \\_')
+                elif role in ('barista','vendor'):
+                    art=(' ___ ',' (o) ',' /|c ',' [#] ',' / \\ ','_/ \\_')
                 if p.umbrella:
-                    art=(' .-. ','| o |',' /|\\ ',' / \\ '); width=.82; height=1.65
-                else:
-                    art=(' o ','/|\\','/ \\'); width=.62; height=1.55
-            projected=height*self.fy/max(z,.35)
-            max_person_height=min(10.0,self.rows*.45)
-            if projected>max_person_height:
-                scale_factor=max_person_height/projected
-                width*=scale_factor; height*=scale_factor
-                person_scale=scale_factor
+                    art=(' .---. ','/_____\\','   o | ','  /|\\| ','  |:|  ','  / \\  ',' _/ \\_ ')
+                    width=1.25; height=2.25
+            else:
+                art=(' o ','/|\\','/ \\'); width=.72; height=1.85
+                if p.umbrella:
+                    art=('/^\\',' o|','/| ','/ \\'); width=1.0; height=2.2
+                elif activity in ('reading','sorting books'):
+                    art=(' o ','[=]','/ \\')
+                elif activity=='playing music':
+                    art=(' o ','/|D','/ \\')
+                elif activity=='taking photos':
+                    art=(' o ','[o]','/ \\')
+            if activity=='tending flowers' and not p.umbrella:
+                art=(' o_','/|/','/ \\'); height=1.2
+            elif activity=='walking' and not p.umbrella:
+                art=art[:-1]+((' /|' if pose else '|\\ ').center(len(art[-1])),)
+            # Near pedestrians keep a readable full silhouette instead of
+            # turning into cropped columns as they pass the watch camera.
+            person_scale=min(1.0,min(float(len(art)),self.rows*.4)/(height*self.fy/z))
+            width*=person_scale; height*=person_scale
         aw=max(map(len,art)); ah=len(art)
         sx=self.cols/2+lateral*self.fx/z
-        # Compress the whole near-person projection around the horizon.
-        # Shrinking only its height would push its face below the screen.
         bottom=self.horizon+self.eye*self.fy/z*person_scale
         pw,ph=width*self.fx/z,height*self.fy/z
         if p.kind=='person':
-            # Terminal cells are tall: unrestricted horizontal magnification
-            # repeats each eye/hair glyph and makes faces look like fences.
-            pw=min(pw,ph*aw/ah*1.2)
+            # Preserve a single face and accessory instead of repeating eyes.
+            pw=min(max(pw,float(aw) if ph>=ah else 3.0 if ph>=2.5 else 1.0),ph*aw/ah*1.1)
         left,top=sx-pw/2,bottom-ph
         if left>=self.cols or left+pw<0: return
-        for r in range(max(0,math.floor(top)),min(self.rows,math.ceil(bottom))):
+        visible=0
+        # Sample only pixel centers INSIDE the projected rectangle. Clamping
+        # samples outside it duplicated the first row (especially NPC heads).
+        for r in range(max(0,math.ceil(top-.5)),min(self.rows,math.ceil(bottom-.5))):
             ar=min(ah-1,max(0,int((r+.5-top)/ph*ah)))
-            for c in range(max(0,math.floor(left)),min(self.cols,math.ceil(left+pw))):
+            for c in range(max(0,math.ceil(left-.5)),min(self.cols,math.ceil(left+pw-.5))):
                 ac=min(aw-1,max(0,int((c+.5-left)/pw*aw)))
                 ch=art[ar][ac] if ac<len(art[ar]) else ' '
-                if ch==' ' or z>self.depth[r][c]+.05: continue
+                solid=(p.kind=='bench' and ar<ah-2 or
+                       p.kind=='fountain' and ar>=ah-3 or
+                       p.kind=='flowers' and ar>=ah//2)
+                if solid:
+                    line=art[ar]
+                    solid=len(line)-len(line.lstrip())<=ac<len(line.rstrip())
+                if p.kind in ('lamp','car','boat','stall','person','bench','fountain','rail'):
+                    ch,_ = sprite_character(art,c+.5-left,r+.5-top,pw,ph)
+                if p.kind=='tree' and ar>=(9 if ah==15 else 4 if ah>4 else 2):
+                    ch,_ = sprite_character(art,c+.5-left,r+.5-top,pw,ph)
+                if (ch==' ' and not solid) or z>self.depth[r][c]+.05: continue
+                visible+=1
                 color=p.color
-                if p.kind=='tree': color=(96,148,104) if ar<3 else (137,105,74)
-                elif p.kind=='lamp': color=(255,209,123) if ar<3 else (114,127,139)
-                elif p.kind=='fountain': color=(128,196,215) if ar<5 else (136,147,155)
+                if p.kind=='tree':
+                    canopy=ar<(9 if ah==15 else 4 if ah>4 else 2)
+                    color=(103,163,109) if canopy else (160,119,77)
+                    if canopy:
+                        light=.78+.26*(1-ac/max(1,aw-1))+.12*(1-ar/max(1,ah-1))
+                        color=scale(color,light)
+                elif p.kind=='lamp': color=(255,209,123) if ar<(3 if ah>3 else 1) else (145,160,173)
+                elif p.kind=='fountain': color=(128,196,215) if ar<(10 if ah==12 else 5 if ah>3 else 1) else (164,174,181)
                 elif p.kind=='bench': color=(175,124,81)
                 elif p.kind=='rail': color=(111,135,148)
-                elif p.kind=='flowers': color=(230,139,163) if ar<2 else (150,125,103)
+                elif p.kind=='flowers':
+                    color=((238,158,183) if ch in '*.' else (112,167,103)) if ar<(4 if ah==8 else 2) else (171,126,91)
+                elif p.kind=='car':
+                    color=(235,220,163) if ch in 'Oo' else (99,158,183) if ar==1 else (76,82,95) if ar==ah-1 else p.color
+                elif p.kind=='boat':
+                    color=(117,191,209) if ar==ah-1 or ch in '[]' else (188,148,101)
+                elif p.kind=='stall':
+                    color=(241,206,148) if ar==2 else p.color if ar<2 else (179,133,85)
                 elif p.kind=='person':
                     role_color=PERSON_COLORS.get(getattr(p,'role',''),p.color)
                     if p.umbrella:
                         # The canopy catches sky light; the body stays a
                         # distinct role color beneath it.
-                        color=((245,250,255) if ar<2 else
-                               (48,34,45) if close_detail and ar==2 else role_color)
+                        color=(mix(role_color,(184,209,217),.35) if ar<(2 if close_detail else 1) else
+                               (240,196,156) if ar==(2 if close_detail else 1) else role_color)
                     elif close_detail:
                         color=((48,34,45) if ar==0 else
                                (255,214,175) if ar==1 else role_color)
                     else:
                         color=(255,214,175) if ar==0 else role_color
-                luminous=(p.kind=='lamp' and ar<3) or (p.kind=='car' and ch=='o')
-                if p.kind=='person' and p.umbrella and ar<2: luminous=True
+                luminous=(p.kind=='lamp' and ch in 'oO') or (p.kind=='car' and ch in 'oO')
                 factor=(1 if luminous else .94 if p.kind=='person'
-                        else .4+.6*self.day)
+                        else min(1.1,.52+.48*self.day+.22*self._light_at(p.x,p.y)))
                 fog_amount=.20 if p.kind=='person' else .55
                 color=mix(scale(color,factor),self.fog,min(.75,z/self.visibility)*fog_amount)
                 bg=self.buffer[r][c][2]
-                self.buffer[r][c]=cell(ch,color,mix(bg,(6,12,20),.82 if p.kind=='person' else .6))
+                # Shade the object itself instead of boxing every character
+                # in black, which made crowns and faces look like stickers.
+                if solid:
+                    bg=mix(bg,scale(color,.28 if p.kind=='fountain' else .32),.92)
+                elif p.kind=='tree' and canopy:
+                    bg=mix(bg,scale(color,.23),.72)
+                elif p.kind=='person':
+                    bg=mix(bg,scale(color,.18),.65)
+                else:
+                    bg=mix(bg,scale(color,.16),.40)
+                self.buffer[r][c]=cell(ch,color,bg)
                 self.depth[r][c]=z
+                self._sprite_owner[r][c]=id(p)
+                if luminous:
+                    self._emission.append((r,c,z,color,.15))
         focus=getattr(getattr(self.world,'life',None),'focus',None)
-        # Keep the watch overlay readable: only the active speaker gets a
-        # label. Distant names used to pile into a
-        # single line and hide the actual people underneath.
-        show_label=(p is focus)
-        if (getattr(self.world,'show_names',False)
-                and not getattr(self.world,'camera_transition',False)
-                and getattr(p,'name','') and ph>=2 and show_label):
-            label=(p.name+' / '+p.activity)[:32] if z<12 else p.name[:12]
-            label_y=max(0,min(self.rows-1,math.floor(top)-1))
-            label_x=round(sx-len(label)/2)
-            for index,char in enumerate(label):
-                xx=label_x+index
-                if 0<=xx<self.cols and self.depth[label_y][xx]>=z-.1:
-                    self.buffer[label_y][xx]=cell(char,(218,232,221),(17,29,34))
-            if p.dialogue and (p is focus or z<14) and label_y>0:
-                speech='"'+p.dialogue+'"'
-                speech=speech[:self.cols-2]
-                start=max(0,min(self.cols-len(speech),round(sx-len(speech)/2)))
-                for index,char in enumerate(speech):
-                    if self.depth[label_y-1][start+index]>=z-.1:
-                        self.buffer[label_y-1][start+index]=cell(char,(245,211,158),(17,29,34))
+        identify=getattr(self.world,'identify',False)
+        if (visible and not getattr(self.world,'camera_transition',False)
+                and ((identify and z<28 and ph>=1.2)
+                     or (p is focus and getattr(self.world,'show_names',False)))):
+            if p.kind=='person':
+                name=p.name or 'Resident'
+                detail=p.activity or p.role
+                label=name+(' / '+detail if detail else '')
+            else:
+                label=PROP_NAMES.get(p.kind,p.kind.title())
+            self._labels.append((z,sx,top,label,p.dialogue if p is focus else '',id(p)))
         if p.kind=='lamp' and self.night>.3:
             cx,cy=round(sx),round(top+ph*.2)
             for oy,ox in ((0,-1),(0,1),(-1,0),(1,0)):
@@ -749,13 +1130,11 @@ class Renderer:
                 x=int((i*73.13-tick*.33)%self.cols)
                 y=int((i*37.79+tick*(1+(i%3)*.25))%self.rows)
                 ch,fg,bg=self.buffer[y][x]
-                self.buffer[y][x]=cell('/' if w.weather==2 else '|',mix(fg,(151,181,204),.6),bg)
+                # Keep rain from erasing identifying features and sign text.
+                if ch not in (' ','.',':','~'): continue
+                self.buffer[y][x]=cell('/' if w.weather==2 else '|',mix(fg,(151,181,204),.48),bg)
                 if y>self.horizon+2 and i%7==0:
                     self.buffer[y][x]=cell('.',(121,163,183),bg)
-        if w.weather==2 and w.time%19<.12:
-            for r,row in enumerate(self.buffer):
-                for c,(ch,fg,bg) in enumerate(row):
-                    self.buffer[r][c]=cell(ch,mix(fg,(213,223,240),.5),mix(bg,(125,145,170),.3))
 
     def _minimap(self):
         if self.cols<72 or self.rows<24: return
@@ -829,6 +1208,7 @@ def help_overlay(buf):
         '|  P          Capture photo      J              Album   |',
         '|  K          Travel journal     Enter          Interact|',
         '|  Tab        Mini map           M              Map     |',
+        '|  B          Identify objects / materials              |',
         '|  C          Color mode         Home           Return  |',
         '|  H          Close this guide   X / Esc / Ctrl-C Exit  |',
         '|                                                      |',

@@ -13,7 +13,12 @@ from dataclasses import dataclass
 
 
 def truecolor_supported():
-    if os.environ.get('TERM_PROGRAM') == 'Apple_Terminal': return False
+    if os.environ.get('TERM_PROGRAM') == 'Apple_Terminal':
+        # Apple added RGB in macOS Tahoe; older Terminal versions require
+        # the fixed palette even when a shell exports COLORTERM=truecolor.
+        import platform
+        try: return int(platform.mac_ver()[0].split('.')[0])>=26
+        except ValueError: return False
     return (os.environ.get('COLORTERM','').lower() in ('truecolor','24bit')
             or any(n in os.environ.get('TERM','').lower() for n in ('kitty','direct','ghostty','wezterm'))
             or os.environ.get('TERM_PROGRAM','').lower() in ('vscode','iterm.app','wezterm','ghostty'))
@@ -21,12 +26,54 @@ def truecolor_supported():
 
 @functools.lru_cache(maxsize=8192)
 def color256(rgb):
+    """Nearest fixed xterm color, with a penalty for a change in hue.
+
+    Plain RGB distance flips a blue sky between teal, purple and gray.
+    Compare neighboring cube colors while preserving the source hue. The
+    neutral ramp remains available for genuinely low-chroma materials.
+    """
     levels=(0,95,135,175,215,255)
-    cube=tuple(min(range(6),key=lambda i:abs(levels[i]-v)) for v in rgb)
-    cube_error=sum((levels[i]-v)**2 for i,v in zip(cube,rgb))
+    neighbors=[]
+    for value in rgb:
+        lower=max(i for i,v in enumerate(levels) if v<=value)
+        neighbors.append((lower,) if levels[lower]==value or lower==5 else (lower,lower+1))
     grey=max(0,min(23,round((sum(rgb)/3-8)/10)))
-    grey_error=sum((8+10*grey-v)**2 for v in rgb)
-    return 232+grey if grey_error<cube_error else 16+36*cube[0]+6*cube[1]+cube[2]
+    chroma=max(rgb)-min(rgb)
+    hue=tuple((v-min(rgb))/chroma for v in rgb) if chroma else (0.,0.,0.)
+    weight=min(16000.,max(0.,chroma-24)*350.)
+    def error(color):
+        distance=sum((a-b)**2 for a,b in zip(rgb,color))
+        span=max(color)-min(color)
+        if span:
+            difference=sum((h-(v-min(color))/span)**2 for h,v in zip(hue,color))
+            # A clearly intermediate channel should not collapse to either
+            # extreme (blue becoming purple is the most visible example).
+            for h,v in zip(hue,color):
+                if .22<h<.78 and v in (min(color),max(color)):
+                    difference+=.65
+        else:
+            difference=.65
+        return distance+weight*difference
+    best=232+grey; best_error=error((8+10*grey,)*3)
+    for r,g,b in itertools.product(*neighbors):
+        candidate=(levels[r],levels[g],levels[b])
+        cost=error(candidate)
+        if cost<best_error:
+            best,best_error=16+36*r+6*g+b,cost
+    return best
+
+
+def palette_rgb(index):
+    """Resolve the fixed 16..255 palette used by the encoder and previews."""
+    if index>=232: return (8+10*(index-232),)*3
+    levels=(0,95,135,175,215,255); index-=16
+    return levels[index//36],levels[(index//6)%6],levels[index%6]
+
+
+def palette_preview(buf):
+    """Show the very same quantized colors that a 256-color terminal gets."""
+    return [[(ch,palette_rgb(color256(fg)),palette_rgb(color256(bg)))
+             for ch,fg,bg in row] for row in buf]
 
 
 def encode(buf, truecolor=True, x=1, y=1):

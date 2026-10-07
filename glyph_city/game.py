@@ -18,7 +18,7 @@ from .settings import SettingsStore
 from .interactions import InteractionCandidate, prompt_for, select_candidate
 from .journal import BookStory, Journal
 from .weather import UmbrellaState, default_shelters
-from .terminal import InputState, Terminal, encode
+from .terminal import InputState, Terminal, encode, palette_preview, truecolor_supported
 from .photos import PhotoAlbum
 from .events import available_events
 from .transit import BoatRide
@@ -111,7 +111,7 @@ def frame(world,renderer,minimap=False,help_open=False,map_open=False,fps=0,true
     mode='' if not input_mode else f' {input_mode.upper()}'
     suffix=f' {rate} {"RGB" if truecolor else "256"}{mode} '
     status=status[:max(0,cols-len(suffix))].ljust(max(0,cols-len(suffix)))+suffix
-    hint=' WASD Walk  Q/E Turn  Shift Run  I Settings  O Watch  [ ] Camera  U Umbrella  R Rain  Y Time  M Map  H Help  X Exit'
+    hint=' WASD Walk  Q/E Turn  B Identify  I Settings  O Watch  [ ] Camera  U Umbrella  R Rain  Y Time  M Map  H Help  X Exit'
     interaction_hint=getattr(world, 'interaction_hint', '')
     toast_active=bool(world.toast and world.time<world.toast_until)
     if interaction_hint and not help_open and not map_open and not toast_active:
@@ -173,6 +173,42 @@ def adjust_setting(settings, index, direction):
     elif field=='night_contrast': value=max(.5,min(2,round(value+direction*.1,1)))
     elif field=='volume': value=max(0,min(1,round(value+direction*.1,1)))
     return replace(settings,**{field:value})
+
+
+def resolve_color(settings, force_256=False, force_rgb=False):
+    """Use the same color decision at launch and after settings edits."""
+    if force_256: return False
+    if force_rgb: return True
+    if settings.palette=='256': return False
+    if settings.palette=='truecolor': return True
+    return settings.truecolor and truecolor_supported()
+
+
+def display_diagnostics(args):
+    """Read-only report from the terminal actually used to launch the game."""
+    import os
+    settings=SettingsStore(args.settings_path).load()
+    terminal=Terminal(resolve_color(settings,args.palette,args.truecolor))
+    cols,rows=terminal.size()
+    width=args.max_width if args.max_width!=160 else settings.max_width
+    aspect=args.aspect if args.aspect is not None else settings.aspect
+    advice=[]
+    if min(cols,width)<140 or min(rows,args.max_height)<43:
+        advice.append('For more detail, enlarge the terminal or reduce its font size; aim for 160-180 columns and 50-60 rows.')
+    if not terminal.truecolor:
+        advice.append('256-color output is active. RGB-capable terminals provide smoother lighting; leave Palette on Auto and Truecolor enabled.')
+    if not .45<=aspect<=.6:
+        advice.append('The saved cell aspect may stretch the scene. Try 0.5 with a regular monospace font.')
+    print(json.dumps({'terminal_app':os.environ.get('TERM_PROGRAM','unknown'),
+                      'term':os.environ.get('TERM','unknown'),
+                      'color_mode':'RGB' if terminal.truecolor else '256',
+                      'rgb_detected':truecolor_supported(),
+                      'terminal_cells':[cols,rows],
+                      'scene_cells':[min(cols,width),max(1,min(rows,args.max_height)-3)],
+                      'cell_aspect':aspect,'detected_aspect':terminal.aspect(),
+                      'recommendations':advice,
+                      'settings_path':str(SettingsStore(args.settings_path).path),
+                      'settings':vars(settings)},indent=2))
 
 
 def start_menu(terminal, args, store=None):
@@ -297,10 +333,7 @@ def play(args):
     settings_open=False; settings_selected=0
     journal_open=False; journal_entries=(); journal_selected=0; capture_requested=False
     mouse_at=0; sensitivity=.018
-    if not args.palette and not args.truecolor:
-        color=False if settings.palette == '256' else True if settings.palette == 'truecolor' else None
-    else:
-        color=False if args.palette else True if args.truecolor else None
+    color=resolve_color(settings,args.palette,args.truecolor)
     with Terminal(color) as terminal:
         store=SaveStore(getattr(args, 'save_path', None))
         photo_album=PhotoAlbum(store.path.parent / 'photos')
@@ -364,7 +397,9 @@ def play(args):
                         settings_store.save(settings)
                         if field in ('max_width','aspect'): previous_size=None
                         args.fps=settings.fps; args.max_width=settings.max_width; args.aspect=settings.aspect
-                        sensitivity=settings.mouse_sensitivity; terminal.truecolor=(settings.palette=='truecolor' or (settings.palette=='auto' and settings.truecolor))
+                        sensitivity=settings.mouse_sensitivity
+                        if field in ('palette','truecolor'):
+                            terminal.truecolor=resolve_color(settings)
                         world.camera_bob_enabled=settings.camera_bob
                         world.night_contrast=settings.night_contrast
                         world.storm_flash_enabled=settings.storm_flash
@@ -418,6 +453,9 @@ def play(args):
                     input_state.apply(event,started)
                     continue
                 if event.release or event.repeat: continue
+                if key=='b':
+                    world.identify=not getattr(world,'identify',False)
+                    continue
                 if key in ('enter','\\r','\\n'):
                     candidate=_selected_interaction(world)
                     if candidate is not None:
@@ -556,7 +594,7 @@ def play(args):
                 next_weather=world.time+120
                 world.message(f'The sky is turning {WEATHER[world.weather].lower()}.')
             tcols,trows=terminal.size()
-            size=(min(tcols,args.max_width),min(trows,64))
+            size=(min(tcols,args.max_width),min(trows,getattr(args,'max_height',90)))
             if (tcols,trows)!=previous_size:
                 terminal.clear(); previous_size=(tcols,trows)
                 renderer=Renderer(max(1,size[0]),max(1,size[1]-3),args.aspect or terminal.aspect())
@@ -647,6 +685,8 @@ def main(argv=None):
     colors.add_argument('--truecolor',action='store_true',help='use 24-bit RGB color')
     parser.add_argument('--fps',type=int,default=24,help='frame limit (default: 24)')
     parser.add_argument('--max-width',type=int,default=160,help='maximum render columns (default: 160)')
+    parser.add_argument('--max-height',type=int,default=90,help='maximum total render rows (default: 90)')
+    parser.add_argument('--diagnose',action='store_true',help='report terminal, color mode and saved visual settings without launching')
     parser.add_argument('--aspect',type=float,help='cell width / cell height, e.g. 0.5')
     parser.add_argument('--shot',action='store_true',help='export HTML and ANSI previews without a terminal')
     parser.add_argument('--watch',action='store_true',help='start in zero-player City Watch mode')
@@ -663,8 +703,11 @@ def main(argv=None):
     if not 0<=args.hour<=24: parser.error('--time hour must be from 0 to 24')
     if not 5<=args.fps<=60: parser.error('--fps must be from 5 to 60')
     if not 40<=args.max_width<=240: parser.error('--max-width must be from 40 to 240')
+    if not 16<=args.max_height<=120: parser.error('--max-height must be from 16 to 120')
     if args.aspect is not None and not .25<=args.aspect<=1: parser.error('--aspect must be from 0.25 to 1')
-    if args.profile:
+    if args.diagnose:
+        display_diagnostics(args)
+    elif args.profile:
         if args.profile_frames < 1 or args.profile_frames > 10000: parser.error('--profile-frames must be from 1 to 10000')
         try: cols,rows=map(int,args.size.lower().split('x'))
         except ValueError: parser.error('--size must be COLSxROWS')
@@ -679,7 +722,7 @@ def main(argv=None):
         world.time=2.5
         buf=frame(world,Renderer(cols,rows,args.aspect or .5),truecolor=not args.palette)
         path=args.output.resolve().with_suffix('.html'); path.parent.mkdir(parents=True,exist_ok=True)
-        export_html(buf,path,args.aspect or .5)
+        export_html(palette_preview(buf) if args.palette else buf,path,args.aspect or .5)
         path.with_suffix('.ans').write_text(encode(buf,not args.palette))
         print(path)
         print(path.with_suffix('.ans'))
